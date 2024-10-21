@@ -1,0 +1,103 @@
+@startuml
+!define RECTANGLE class
+skinparam rectangle {
+    BackgroundColor<<Context>> LightBlue
+    BackgroundColor<<Shared>> LightYellow
+    BorderColor black
+    FontSize 12
+    FontName Arial
+}
+
+' Define Bounded Contexts
+package "Bounded Contexts" {
+    RECTANGLE "Content Management\nService" as ContentService <<Context>> {
+        + CreateContent()
+        + UpdateContent()
+        + DeleteContent()
+    }
+
+    RECTANGLE "User Management\nService" as UserService <<Context>> {
+        + RegisterUser()
+        + UpdateUser()
+        + AuthenticateUser()
+    }
+
+    RECTANGLE "Comment Service" as CommentService <<Context>> {
+        + AddComment()
+        + UpdateComment()
+        + DeleteComment()
+    }
+
+    RECTANGLE "Notification\nService" as NotificationService <<Context>> {
+        + SendEmail()
+        + SendPushNotification()
+    }
+
+    RECTANGLE "Recommendation\nService" as RecommendationService <<Context>> {
+        + GenerateRecommendations()
+    }
+
+    RECTANGLE "Search Service" as SearchService <<Context>> {
+        + IndexContent()
+        + SearchContent()
+    }
+
+    RECTANGLE "Analytics Service" as AnalyticsService <<Context>> {
+        + TrackUserBehavior()
+        + GenerateReports()
+    }
+
+    RECTANGLE "Advertisement\nService" as AdService <<Context>> {
+        + ManageAds()
+        + TrackAdPerformance()
+    }
+}
+
+' Define Shared Contexts (Kafka)
+package "Shared Contexts" {
+    RECTANGLE "Kafka Topics" as Kafka <<Shared>> {
+        + ContentEvents
+        + UserEvents
+        + CommentEvents
+        + NotificationEvents
+        + AnalyticsEvents
+    }
+
+    RECTANGLE "API Gateway" as APIGateway <<Shared>> {
+        + RouteRequests()
+        + Authentication()
+        + RateLimiting()
+    }
+
+    RECTANGLE "External Systems" as External <<Shared>> {
+        + External APIs
+        + Social Media
+    }
+}
+
+' Define interactions via Kafka
+ContentService --> Kafka : Publish\nContentCreated,\nContentUpdated
+UserService --> Kafka : Publish\nUserRegistered,\nUserUpdated
+CommentService --> Kafka : Publish\nCommentAdded,\nCommentUpdated,\nCommentDeleted
+
+Kafka --> NotificationService : Subscribe to\nContentEvents,\nUserEvents,\nCommentEvents
+Kafka --> AnalyticsService : Subscribe to\nContentEvents,\nUserEvents,\nCommentEvents
+Kafka --> RecommendationService : Subscribe to\nUserEvents,\nContentEvents
+Kafka --> SearchService : Subscribe to\nContentEvents
+
+' Define API Gateway interactions
+APIGateway --> ContentService : REST API Calls
+APIGateway --> UserService : REST API Calls
+APIGateway --> CommentService : REST API Calls
+APIGateway --> NotificationService : REST API Calls
+APIGateway --> RecommendationService : REST API Calls
+APIGateway --> SearchService : REST API Calls
+APIGateway --> AnalyticsService : REST API Calls
+APIGateway --> AdService : REST API Calls
+
+' Define External Systems interactions
+External --> UserService : Integrate with\nSocial Media
+External --> AdService : Fetch External Ads
+External --> AnalyticsService : Send External Data
+
+@enduml
