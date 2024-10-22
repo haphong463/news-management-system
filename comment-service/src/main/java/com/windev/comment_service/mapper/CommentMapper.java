@@ -2,7 +2,9 @@ package com.windev.comment_service.mapper;
 
 import com.windev.comment_service.dto.request.CreateCommentRequest;
 import com.windev.comment_service.dto.response.CommentDto;
+import com.windev.comment_service.dto.response.UserDto;
 import com.windev.comment_service.entity.Comment;
+import com.windev.comment_service.payload.response.CommentWithUserResponse;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.factory.Mappers;
@@ -31,6 +33,25 @@ public interface CommentMapper {
                 .collect(Collectors.toList());
     }
 
+    // Ánh xạ từ Comment và UserDto sang CommentWithUserResponse
+    @Mapping(source = "comment.id", target = "id")  // Lấy "id" từ Comment
+    @Mapping(source = "comment.articleId", target = "articleId")
+    @Mapping(source = "comment.content", target = "content")
+    @Mapping(source = "comment.createdAt", target = "createdAt")
+    @Mapping(source = "comment.updatedAt", target = "updatedAt")
+    @Mapping(source = "userDto.id", target = "userId")  // Lấy "userId" từ UserDto
+    @Mapping(source = "userDto.username", target = "username")  // Lấy "username" từ UserDto
+    @Mapping(source = "comment.parentComment.id", target = "parentCommentId")
+    CommentWithUserResponse toDtoWithUser(Comment comment, UserDto userDto);
+
+    default List<CommentWithUserResponse> mapChildCommentsWithUser(List<Comment> childComments, UserDto userDto) {
+        if (childComments == null) {
+            return null;
+        }
+        return childComments.stream()
+                .map(comment -> toDtoWithUser(comment, userDto))
+                .collect(Collectors.toList());
+    }
     // Phương thức ánh xạ từ parentComment sang parentCommentId
     default Long mapParentComment(Comment parentComment) {
         return parentComment != null ? parentComment.getId() : null;

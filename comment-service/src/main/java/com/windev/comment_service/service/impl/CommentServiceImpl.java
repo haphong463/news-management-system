@@ -1,10 +1,13 @@
 package com.windev.comment_service.service.impl;
 
+import com.windev.comment_service.client.UserClient;
 import com.windev.comment_service.dto.request.CreateCommentRequest;
 import com.windev.comment_service.dto.request.UpdateCommentRequest;
 import com.windev.comment_service.dto.response.CommentDto;
+import com.windev.comment_service.dto.response.UserDto;
 import com.windev.comment_service.entity.Comment;
 import com.windev.comment_service.mapper.CommentMapper;
+import com.windev.comment_service.payload.response.CommentWithUserResponse;
 import com.windev.comment_service.repository.CommentRepository;
 import com.windev.comment_service.service.CommentService;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CommentServiceImpl implements CommentService {
     private final CommentMapper commentMapper;
     private final CommentRepository commentRepository;
+    private final UserClient userClient;
 
     @Override
     @Transactional
@@ -64,8 +68,17 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<CommentDto> getCommentsByArticle(Long articleId, Pageable pageable) {
-        return commentRepository.findByArticleIdAndParentCommentIsNull(articleId, pageable).map(commentMapper::toDtoWithChildren);
+    public Page<CommentWithUserResponse> getCommentsByArticle(Long articleId, Pageable pageable) {
+        // Lấy danh sách bình luận theo bài viết
+        return commentRepository.findByArticleIdAndParentCommentIsNull(articleId, pageable).map(comment -> {
+            // Gọi Feign Client để lấy thông tin user dựa trên userId từ Comment
+            UserDto userDto = userClient.getUserById(comment.getUserId()).getBody();
+            CommentWithUserResponse response = commentMapper.toDtoWithUser(comment, userDto);
+
+            // Map comment và thông tin user thành CommentWithUserResponse
+            response.setChildComments(commentMapper.mapChildCommentsWithUser(comment.getChildComments(), userDto));
+            return response;
+        });
     }
 
     @Override

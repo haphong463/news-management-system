@@ -5,6 +5,7 @@ import com.windev.user_service.handler.CustomAccessDeniedHandler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -41,8 +42,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public UserDetailsService userDetailsService(){
-            return new CustomUserDetailsService();
+    public UserDetailsService userDetailsService() {
+        return new CustomUserDetailsService();
     }
 
     @Bean
@@ -51,9 +52,13 @@ public class SecurityConfig {
         http.csrf(AbstractHttpConfigurer::disable)
                 .exceptionHandling(httpSecurityExceptionHandlingConfigurer -> httpSecurityExceptionHandlingConfigurer.accessDeniedHandler(accessDeniedHandler).authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .sessionManagement(httpSecuritySessionManagementConfigurer -> httpSecuritySessionManagementConfigurer.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(expressionInterceptUrlRegistry -> expressionInterceptUrlRegistry.requestMatchers(
-                        "/api/v1/auth/login", "/api/v1/auth/register", "/swagger-ui/**", "/v3/api-docs/**"
-                ).permitAll().anyRequest().authenticated());
+                .authorizeHttpRequests(expressionInterceptUrlRegistry -> expressionInterceptUrlRegistry
+                        .requestMatchers(HttpMethod.GET).permitAll()
+                        .requestMatchers(
+                                "/api/v1/auth/login", "/api/v1/auth/register", "/swagger-ui/**", "/v3/api-docs/**, /api/v1/users/**"
+                        ).permitAll().
+
+                        anyRequest().authenticated());
 
 
         // Add JWT filter

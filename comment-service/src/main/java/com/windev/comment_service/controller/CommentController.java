@@ -2,6 +2,7 @@ package com.windev.comment_service.controller;
 
 import com.windev.comment_service.dto.request.CreateCommentRequest;
 import com.windev.comment_service.dto.response.CommentDto;
+import com.windev.comment_service.payload.response.CommentWithUserResponse;
 import com.windev.comment_service.service.CommentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +35,7 @@ public class CommentController {
             @PathVariable Long articleId,
             Pageable pageable) {
         try {
-            Page<CommentDto> comments = commentService.getCommentsByArticle(articleId, pageable);
+            Page<CommentWithUserResponse> comments = commentService.getCommentsByArticle(articleId, pageable);
             return new ResponseEntity<>(comments, HttpStatus.OK);
         }catch(Exception e){
             return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
