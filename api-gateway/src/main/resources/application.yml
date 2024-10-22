@@ -12,6 +12,8 @@ spring:
           uri: http://localhost:8082
           predicates:
             - Path=/api/v1/articles/**
+          filters:
+            - name: AuthenticationFilter
 server:
   port: 9191
 eureka:
@@ -27,3 +29,6 @@ management:
   tracing:
     sampling:
       probability: 1
+
+jwt:
+  secret: 5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437
