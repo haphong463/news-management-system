@@ -25,6 +25,8 @@ public class JwtTokenUtil {
     @Value("${jwt.secret}")
     private String secret;
 
+    @Value("${jwt.expire}")
+    private long expire;
     // Tạo token cho user
     public String generateToken(Authentication authentication) {
         CustomUserDetails userPrincipal = (CustomUserDetails) authentication.getPrincipal();
@@ -34,7 +36,7 @@ public class JwtTokenUtil {
                 .claim("roles", userPrincipal.getAuthorities())
                 .claim("email", userPrincipal.getEmail())
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 30))
+                .setExpiration(new Date(expire))
                 .signWith(getSignKey(), SignatureAlgorithm.HS256).compact();
     }
 
