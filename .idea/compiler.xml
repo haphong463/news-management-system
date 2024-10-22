@@ -8,6 +8,7 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="api-gateway" />
+        <module name="comment-service" />
         <module name="user-service" />
         <module name="article-service" />
         <module name="discovery-service" />
@@ -18,6 +19,7 @@
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
       <module name="api-gateway" options="-parameters" />
       <module name="article-service" options="-parameters" />
+      <module name="comment-service" options="-parameters" />
       <module name="discovery-service" options="-parameters" />
       <module name="user-service" options="-parameters" />
     </option>
