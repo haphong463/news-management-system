@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.Date;
 
 @Entity
 @Table(name = "reactions")
@@ -28,5 +29,5 @@ public class Reaction {
     @JoinColumn(name = "reaction_type_id", nullable = false)
     private ReactionType reactionType;
 
-    private Instant createdAt = Instant.now();
+    private Date createdAt;
 }

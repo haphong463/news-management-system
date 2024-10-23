@@ -1,29 +1,33 @@
-package com.windev.reaction_service.service;
+package com.windev.reaction_service.service.impl;
 
 import com.windev.reaction_service.dto.ReactionDto;
 import com.windev.reaction_service.entity.Reaction;
 import com.windev.reaction_service.entity.ReactionType;
 import com.windev.reaction_service.repository.ReactionRepository;
 import com.windev.reaction_service.repository.ReactionTypeRepository;
+import com.windev.reaction_service.service.ReactionService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import jakarta.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
-public class ReactionServiceImpl {
+public class ReactionServiceImpl implements ReactionService {
 
     private final ReactionRepository reactionRepository;
     private final ReactionTypeRepository reactionTypeRepository;
+    private final RedisTemplate<String, Object> redisTemplate;  // Inject RedisTemplate
 
-    // Thêm hoặc cập nhật reaction và xóa cache cũ
+    private static final String REACTION_BY_ARTICLE_KEY = "reactionsByArticle::";
+    private static final String REACTION_BY_COMMENT_KEY = "reactionsByComment::";
+
+    // Thêm hoặc cập nhật reaction và xóa cache thủ công
     @Transactional
-    @CacheEvict(value = {"reactionsByArticle", "reactionsByComment"}, allEntries = true)
     public Reaction addOrUpdateReaction(ReactionDto reactionDto) {
         Optional<ReactionType> reactionTypeOpt = reactionTypeRepository.findById(reactionDto.getReactionTypeId());
         if (reactionTypeOpt.isEmpty()) {
@@ -31,7 +35,7 @@ public class ReactionServiceImpl {
         }
 
         ReactionType reactionType = reactionTypeOpt.get();
-        Reaction reaction = null;
+        Reaction reaction = new Reaction();
 
         // Kiểm tra reaction đã tồn tại trên bài viết hay bình luận chưa
         if (reactionDto.getArticleId() != null) {
@@ -48,24 +52,68 @@ public class ReactionServiceImpl {
         reaction.setCommentId(reactionDto.getCommentId());
         reaction.setReactionType(reactionType);
 
-        return reactionRepository.save(reaction);
+        Reaction savedReaction = reactionRepository.save(reaction);
+
+        // Xóa cache cũ sau khi cập nhật
+        if (reactionDto.getArticleId() != null) {
+            redisTemplate.delete(REACTION_BY_ARTICLE_KEY + reactionDto.getArticleId());
+        } else if (reactionDto.getCommentId() != null) {
+            redisTemplate.delete(REACTION_BY_COMMENT_KEY + reactionDto.getCommentId());
+        }
+
+        return savedReaction;
     }
 
-    // Lấy tất cả reaction của bài viết và lưu kết quả vào cache
-    @Cacheable(value = "reactionsByArticle", key = "#articleId")
+    // Lấy tất cả reaction của bài viết và lưu vào Redis nếu chưa có
     public List<Reaction> getReactionsByArticle(Long articleId) {
-        return reactionRepository.findByArticleId(articleId);
+        String redisKey = REACTION_BY_ARTICLE_KEY + articleId;
+
+        // Kiểm tra Redis cache trước
+        List<Reaction> reactions = (List<Reaction>) redisTemplate.opsForValue().get(redisKey);
+        if (reactions != null) {
+            return reactions;
+        }
+
+        // Nếu không có trong cache, truy vấn từ DB và lưu vào Redis
+        reactions = reactionRepository.findByArticleId(articleId);
+
+        redisTemplate.opsForValue().set(redisKey, reactions, 10, TimeUnit.MINUTES);  // Cache 10 phút
+
+        return reactions;
     }
 
-    // Lấy tất cả reaction của bình luận và lưu kết quả vào cache
-    @Cacheable(value = "reactionsByComment", key = "#commentId")
+    // Lấy tất cả reaction của bình luận và lưu vào Redis nếu chưa có
     public List<Reaction> getReactionsByComment(Long commentId) {
-        return reactionRepository.findByCommentId(commentId);
+        String redisKey = REACTION_BY_COMMENT_KEY + commentId;
+
+        // Kiểm tra Redis cache trước
+        List<Reaction> reactions = (List<Reaction>) redisTemplate.opsForValue().get(redisKey);
+        if (reactions != null) {
+            return reactions;
+        }
+
+        // Nếu không có trong cache, truy vấn từ DB và lưu vào Redis
+        reactions = reactionRepository.findByCommentId(commentId);
+        redisTemplate.opsForValue().set(redisKey, reactions, 10, TimeUnit.MINUTES);  // Cache 10 phút
+
+        return reactions;
     }
 
-    // Xóa reaction và xóa cache cũ
-    @CacheEvict(value = {"reactionsByArticle", "reactionsByComment"}, allEntries = true)
+    // Xóa reaction và xóa cache thủ công
     public void deleteReaction(Long reactionId) {
-        reactionRepository.deleteById(reactionId);
+        Optional<Reaction> reactionOpt = reactionRepository.findById(reactionId);
+        if (reactionOpt.isPresent()) {
+            Reaction reaction = reactionOpt.get();
+
+            // Xóa cache cũ sau khi xóa reaction
+            if (reaction.getArticleId() != null) {
+                redisTemplate.delete(REACTION_BY_ARTICLE_KEY + reaction.getArticleId());
+            } else if (reaction.getCommentId() != null) {
+                redisTemplate.delete(REACTION_BY_COMMENT_KEY + reaction.getCommentId());
+            }
+
+            // Xóa reaction khỏi DB
+            reactionRepository.deleteById(reactionId);
+        }
     }
 }
