@@ -2,6 +2,7 @@ package com.windev.comment_service.mapper;
 
 import com.windev.comment_service.dto.request.CreateCommentRequest;
 import com.windev.comment_service.dto.response.CommentDto;
+import com.windev.comment_service.dto.response.ReactionDto;
 import com.windev.comment_service.dto.response.UserDto;
 import com.windev.comment_service.entity.Comment;
 import com.windev.comment_service.payload.response.CommentWithUserResponse;
@@ -66,5 +67,12 @@ public interface CommentMapper {
         CommentDto dto = toDto(comment);
         dto.setChildComments(mapChildComments(comment.getChildComments())); // Đệ quy để ánh xạ bình luận con
         return dto;
+    }
+
+    // Phương thức để thêm danh sách reactions vào CommentWithUserResponse
+    default CommentWithUserResponse toDtoWithReactions(Comment comment, UserDto userDto, List<ReactionDto> reactions) {
+        CommentWithUserResponse response = toDtoWithUser(comment, userDto);
+        response.setReactions(reactions);  // Thêm danh sách reactions vào
+        return response;
     }
 }

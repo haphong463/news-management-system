@@ -1,6 +1,7 @@
 package com.windev.comment_service.payload.response;
 
 import com.windev.comment_service.dto.response.CommentDto;
+import com.windev.comment_service.dto.response.ReactionDto;
 import com.windev.comment_service.dto.response.UserDto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -30,4 +31,6 @@ public class CommentWithUserResponse {
     private Date updatedAt;
 
     private String username;
+
+    private List<ReactionDto> reactions;
 }
