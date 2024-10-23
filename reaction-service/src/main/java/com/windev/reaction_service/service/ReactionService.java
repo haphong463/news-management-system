@@ -13,4 +13,6 @@ public interface ReactionService {
     List<Reaction> getReactionsByComment(Long commentId);
 
     void deleteReaction(Long reactionId);
+
+    List<Reaction> getReactionsByComments(List<Long> commentIds);
 }

@@ -116,4 +116,9 @@ public class ReactionServiceImpl implements ReactionService {
             reactionRepository.deleteById(reactionId);
         }
     }
+
+    @Override
+    public List<Reaction> getReactionsByComments(List<Long> commentIds) {
+        return reactionRepository.findByCommentIdIn(commentIds);
+    }
 }

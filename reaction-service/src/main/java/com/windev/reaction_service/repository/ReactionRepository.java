@@ -15,4 +15,6 @@ public interface ReactionRepository extends JpaRepository<Reaction, Long> {
     Optional<Reaction> findByUserIdAndArticleId(Long userId, Long articleId);
 
     Optional<Reaction> findByUserIdAndCommentId(Long userId, Long commentId);
+
+    List<Reaction> findByCommentIdIn(List<Long> commentIds);
 }

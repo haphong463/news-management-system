@@ -36,4 +36,11 @@ public class ReactionController {
         reactionService.deleteReaction(reactionId);
         return ResponseEntity.noContent().build();
     }
+
+    @GetMapping("/comments")
+    public ResponseEntity<List<Reaction>> getReactionsByComments(@RequestParam List<Long> commentIds) {
+        List<Reaction> reactions = reactionService.getReactionsByComments(commentIds);
+        return ResponseEntity.ok(reactions);
+    }
+
 }
