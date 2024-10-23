@@ -12,6 +12,7 @@
         <module name="user-service" />
         <module name="article-service" />
         <module name="discovery-service" />
+        <module name="reaction-service" />
       </profile>
     </annotationProcessing>
   </component>
@@ -21,6 +22,7 @@
       <module name="article-service" options="-parameters" />
       <module name="comment-service" options="-parameters" />
       <module name="discovery-service" options="-parameters" />
+      <module name="reaction-service" options="-parameters" />
       <module name="user-service" options="-parameters" />
     </option>
   </component>
