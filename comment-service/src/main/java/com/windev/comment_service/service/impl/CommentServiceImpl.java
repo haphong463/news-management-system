@@ -19,6 +19,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -91,35 +92,58 @@ public class CommentServiceImpl implements CommentService {
     }
 
     private PaginatedResponse<CommentWithUserResponse> convertToPaginatedResponseDto(Page<Comment> commentPage) {
+
+        // * get all comment id to send a batch request to reactionClient
+        List<Long> commentIds = commentPage.getContent().stream()
+                .flatMap(comment -> getAllCommentIds(comment).stream())
+                .collect(Collectors.toList());
+
+        // * get list reaction by commentIds
+        List<ReactionDto> reactionsResponse = reactionClient.getReactionsByComments(commentIds).getBody();
+
         List<CommentWithUserResponse> comments = commentPage.getContent().stream().map(comment -> {
-            // Lấy thông tin user từ UserClient
+            // * get user from userClient
             UserDto userDto = userClient.getUserById(comment.getUserId()).getBody();
             CommentWithUserResponse response = commentMapper.toDtoWithUser(comment, userDto);
 
-            // Map child comments (bình luận con)
+            // * Map child comments
             response.setChildComments(commentMapper.mapChildCommentsWithUser(comment.getChildComments(), userDto));
 
             return response;
         }).collect(Collectors.toList());
 
-        // Lấy tất cả commentId để gửi batch request đến ReactionClient
-        List<Long> commentIds = commentPage.getContent().stream()
-                .map(Comment::getId)
-                .collect(Collectors.toList());
-
-        // Gọi ReactionClient chỉ một lần với tất cả commentIds
-        List<ReactionDto> reactionsResponse = reactionClient.getReactionsByComments(commentIds).getBody();
-
-        // Ánh xạ các reactions vào từng comment
-        comments.forEach(comment -> {
-            List<ReactionDto> commentReactions = reactionsResponse.stream()
-                    .filter(reaction -> reaction.getCommentId().equals(comment.getId()))
-                    .collect(Collectors.toList());
-            comment.setReactions(commentReactions); // Set phản ứng cho mỗi comment
-        });
+        // * assign reactions to individual comments and child comments
+        assignReactionsToComments(comments, reactionsResponse);
 
         return new PaginatedResponse<>(comments, commentPage.getNumber(), commentPage.getSize(),
                 commentPage.getTotalPages(), commentPage.getTotalElements(), commentPage.isLast());
+    }
+
+
+    private void assignReactionsToComments(List<CommentWithUserResponse> comments, List<ReactionDto> reactionsResponse) {
+        for (CommentWithUserResponse comment : comments) {
+            // * filter reactions for current comment
+            List<ReactionDto> commentReactions = reactionsResponse.stream()
+                    .filter(reaction -> reaction.getCommentId().equals(comment.getId()))
+                    .collect(Collectors.toList());
+            comment.setReactions(commentReactions);
+
+            // * if comment has child comments, continue recursion
+            if (comment.getChildComments() != null && !comment.getChildComments().isEmpty()) {
+                assignReactionsToComments(comment.getChildComments(), reactionsResponse);
+            }
+        }
+    }
+
+    private List<Long> getAllCommentIds(Comment comment) {
+        List<Long> ids = new ArrayList<>();
+        ids.add(comment.getId());
+        if (comment.getChildComments() != null && !comment.getChildComments().isEmpty()) {
+            for (Comment child : comment.getChildComments()) {
+                ids.addAll(getAllCommentIds(child));
+            }
+        }
+        return ids;
     }
 
 }
