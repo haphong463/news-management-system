@@ -8,6 +8,7 @@ import com.windev.comment_service.dto.response.CommentDto;
 import com.windev.comment_service.dto.response.ReactionDto;
 import com.windev.comment_service.dto.response.UserDto;
 import com.windev.comment_service.entity.Comment;
+import com.windev.comment_service.exception.CommentNotFoundException;
 import com.windev.comment_service.mapper.CommentMapper;
 import com.windev.comment_service.payload.response.CommentWithUserResponse;
 import com.windev.comment_service.payload.response.PaginatedResponse;
@@ -19,51 +20,45 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class CommentServiceImpl implements CommentService {
+
     private final CommentMapper commentMapper;
     private final CommentRepository commentRepository;
     private final UserClient userClient;
     private final ReactionClient reactionClient;
 
-
     @Override
     @Transactional
     public CommentDto addComment(CreateCommentRequest request) {
         Comment comment = new Comment();
-
         comment.setArticleId(request.getArticleId());
         comment.setUserId(request.getUserId());
         comment.setContent(request.getContent());
 
         if (request.getParentCommentId() != null) {
             Comment parentComment = commentRepository.findById(request.getParentCommentId())
-                    .orElseThrow(() -> new RuntimeException("Parent comment not found with id: " + request.getParentCommentId()));
-
+                    .orElseThrow(() -> new CommentNotFoundException("Not found with ID: " + request.getParentCommentId()));
             comment.setParentComment(parentComment);
         }
 
         Comment savedComment = commentRepository.save(comment);
-
         return commentMapper.toDtoWithChildren(savedComment);
     }
 
     @Override
     @Transactional
     public CommentWithUserResponse updateComment(Long commentId, UpdateCommentRequest request) {
-        Comment comment = commentRepository.findById(commentId)
-                .orElseThrow(() -> new RuntimeException("Comment not found with id: " + commentId));
+        Comment comment = commentRepository.findById(commentId).orElseThrow(() -> new CommentNotFoundException("Not found with ID: " + commentId));
 
         comment.setContent(request.getContent());
-
         Comment updatedComment = commentRepository.save(comment);
-        UserDto userDto = userClient.getUserById(comment.getUserId()).getBody();
 
+        UserDto userDto = userClient.getUserById(comment.getUserId()).getBody();
         CommentWithUserResponse response = commentMapper.toDtoWithUser(updatedComment, userDto);
         response.setChildComments(commentMapper.mapChildCommentsWithUser(comment.getChildComments(), userDto));
 
@@ -73,64 +68,57 @@ public class CommentServiceImpl implements CommentService {
     @Override
     @Transactional
     public void deleteComment(Long commentId) {
-        Comment comment = commentRepository.findById(commentId)
-                .orElseThrow(() -> new RuntimeException("Comment not found with id: " + commentId));
-
+        Comment comment = commentRepository.findById(commentId).orElseThrow(() -> new CommentNotFoundException("Not found with ID: " + commentId));
         commentRepository.delete(comment);
-
     }
 
     @Override
     @Transactional(readOnly = true)
     public PaginatedResponse<CommentWithUserResponse> getCommentsByArticle(Long articleId, Pageable pageable) {
-        return convertToPaginatedResponseDto(commentRepository.findByArticleIdAndParentCommentIsNull(articleId,pageable));
+        Page<Comment> commentPage = commentRepository.findByArticleIdAndParentCommentIsNull(articleId, pageable);
+        return convertToPaginatedResponseDto(commentPage);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PaginatedResponse<CommentWithUserResponse> getCommentsByUser(Long userId, Pageable pageable) {
-        return convertToPaginatedResponseDto(commentRepository.findByUserId(userId, pageable));
+        Page<Comment> commentPage = commentRepository.findByUserId(userId, pageable);
+        return convertToPaginatedResponseDto(commentPage);
     }
 
     private PaginatedResponse<CommentWithUserResponse> convertToPaginatedResponseDto(Page<Comment> commentPage) {
 
-        // * get all comment id to send a batch request to reactionClient
-        List<Long> commentIds = commentPage.getContent().stream()
-                .flatMap(comment -> getAllCommentIds(comment).stream())
-                .collect(Collectors.toList());
+        List<Long> commentIds = commentPage.stream().flatMap(comment -> getAllCommentIds(comment).stream()).collect(Collectors.toList());
 
-        // * get list reaction by commentIds
-        List<ReactionDto> reactionsResponse = reactionClient.getReactionsByComments(commentIds).getBody();
+        List<ReactionDto> reactions = reactionClient.getReactionsByComments(commentIds).getBody();
 
-        List<CommentWithUserResponse> comments = commentPage.getContent().stream().map(comment -> {
-            // * get user from userClient
-            UserDto userDto = userClient.getUserById(comment.getUserId()).getBody();
-            CommentWithUserResponse response = commentMapper.toDtoWithUser(comment, userDto);
+        Map<Long, UserDto> userCache = new HashMap<>();
+        List<CommentWithUserResponse> comments = commentPage.stream().map(comment -> mapCommentWithUser(comment, userCache)).collect(Collectors.toList());
 
-            // * Map child comments
-            response.setChildComments(commentMapper.mapChildCommentsWithUser(comment.getChildComments(), userDto));
+        assignReactionsToComments(comments, reactions);
 
-            return response;
-        }).collect(Collectors.toList());
-
-        // * assign reactions to individual comments and child comments
-        assignReactionsToComments(comments, reactionsResponse);
-
-        return new PaginatedResponse<>(comments, commentPage.getNumber(), commentPage.getSize(),
-                commentPage.getTotalPages(), commentPage.getTotalElements(), commentPage.isLast());
+        return new PaginatedResponse<>(comments, commentPage.getNumber(), commentPage.getSize(), commentPage.getTotalPages(), commentPage.getTotalElements(), commentPage.isLast());
     }
 
+    private CommentWithUserResponse mapCommentWithUser(Comment comment, Map<Long, UserDto> userCache) {
 
-    private void assignReactionsToComments(List<CommentWithUserResponse> comments, List<ReactionDto> reactionsResponse) {
+        UserDto userDto = userCache.computeIfAbsent(comment.getUserId(), id -> userClient.getUserById(id).getBody());
+
+        CommentWithUserResponse response = commentMapper.toDtoWithUser(comment, userDto);
+        response.setChildComments(comment.getChildComments().stream().map(child -> mapCommentWithUser(child, userCache)).collect(Collectors.toList()));
+
+        return response;
+    }
+
+    private void assignReactionsToComments(List<CommentWithUserResponse> comments, List<ReactionDto> reactions) {
+
+        Map<Long, List<ReactionDto>> reactionsMap = reactions.stream().collect(Collectors.groupingBy(ReactionDto::getCommentId));
+
         for (CommentWithUserResponse comment : comments) {
-            // * filter reactions for current comment
-            List<ReactionDto> commentReactions = reactionsResponse.stream()
-                    .filter(reaction -> reaction.getCommentId().equals(comment.getId()))
-                    .collect(Collectors.toList());
-            comment.setReactions(commentReactions);
+            comment.setReactions(reactionsMap.getOrDefault(comment.getId(), Collections.emptyList()));
 
-            // * if comment has child comments, continue recursion
             if (comment.getChildComments() != null && !comment.getChildComments().isEmpty()) {
-                assignReactionsToComments(comment.getChildComments(), reactionsResponse);
+                assignReactionsToComments(comment.getChildComments(), reactions);
             }
         }
     }
@@ -138,12 +126,14 @@ public class CommentServiceImpl implements CommentService {
     private List<Long> getAllCommentIds(Comment comment) {
         List<Long> ids = new ArrayList<>();
         ids.add(comment.getId());
+
         if (comment.getChildComments() != null && !comment.getChildComments().isEmpty()) {
             for (Comment child : comment.getChildComments()) {
                 ids.addAll(getAllCommentIds(child));
             }
         }
+
         return ids;
     }
-
 }
+
