@@ -8,7 +8,7 @@ import com.windev.comment_service.dto.response.CommentDto;
 import com.windev.comment_service.dto.response.ReactionDto;
 import com.windev.comment_service.dto.response.UserDto;
 import com.windev.comment_service.entity.Comment;
-import com.windev.comment_service.exception.CommentNotFoundException;
+import com.windev.comment_service.exception.GlobalException;
 import com.windev.comment_service.mapper.CommentMapper;
 import com.windev.comment_service.payload.response.CommentWithUserResponse;
 import com.windev.comment_service.payload.response.PaginatedResponse;
@@ -17,6 +17,7 @@ import com.windev.comment_service.service.CommentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,7 +43,7 @@ public class CommentServiceImpl implements CommentService {
 
         if (request.getParentCommentId() != null) {
             Comment parentComment = commentRepository.findById(request.getParentCommentId())
-                    .orElseThrow(() -> new CommentNotFoundException("Not found with ID: " + request.getParentCommentId()));
+                    .orElseThrow(() -> new GlobalException("Not found with ID: " + request.getParentCommentId(), HttpStatus.NOT_FOUND));
             comment.setParentComment(parentComment);
         }
 
@@ -53,7 +54,7 @@ public class CommentServiceImpl implements CommentService {
     @Override
     @Transactional
     public CommentWithUserResponse updateComment(Long commentId, UpdateCommentRequest request) {
-        Comment comment = commentRepository.findById(commentId).orElseThrow(() -> new CommentNotFoundException("Not found with ID: " + commentId));
+        Comment comment = commentRepository.findById(commentId).orElseThrow(() -> new GlobalException("Not found with ID: " + commentId, HttpStatus.NOT_FOUND));
 
         comment.setContent(request.getContent());
         Comment updatedComment = commentRepository.save(comment);
@@ -68,7 +69,7 @@ public class CommentServiceImpl implements CommentService {
     @Override
     @Transactional
     public void deleteComment(Long commentId) {
-        Comment comment = commentRepository.findById(commentId).orElseThrow(() -> new CommentNotFoundException("Not found with ID: " + commentId));
+        Comment comment = commentRepository.findById(commentId).orElseThrow(() -> new GlobalException("Not found with ID: " + commentId, HttpStatus.NOT_FOUND));
         commentRepository.delete(comment);
     }
 
