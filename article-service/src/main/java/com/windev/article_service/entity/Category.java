@@ -30,6 +30,10 @@ public class Category extends  AbstractEntity{
     @JoinColumn(name = "parent_category_id")
     private Category parentCategory;
 
+
+    @OneToMany(mappedBy = "parentCategory")
+    private List<Category> subCategories;
+
     @ManyToMany(mappedBy = "categories")
     private Set<Article> articles;
 }
