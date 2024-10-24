@@ -26,11 +26,23 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
 management:
+  info:
+    java:
+      enabled: true
   endpoints:
     web:
       exposure:
-        include: "*"
-  tracing:
-    sampling:
-      probability: 1
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+info:
+  app:
+    name: "Article Service"
+    description: "Article Service Description"
+    version: "1.0.0"
