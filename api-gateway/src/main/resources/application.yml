@@ -9,26 +9,26 @@ spring:
           predicates:
             - Path=/api/v1/auth/**
         - id: article-service
-          uri: http://localhost:8082
+          uri: lb://article-service
           predicates:
             - Path=/api/v1/articles/**
-          filters:
-            - name: AuthenticationFilter
+
 server:
   port: 9191
 eureka:
   client:
     serviceUrl:
       defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
 
 management:
   endpoints:
     web:
       exposure:
         include: "*"
-  tracing:
-    sampling:
-      probability: 1
+
 
 jwt:
   secret: 5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437
