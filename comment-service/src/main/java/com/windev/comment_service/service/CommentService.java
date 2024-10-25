@@ -13,5 +13,5 @@ public interface CommentService {
     CommentWithUserResponse updateComment(Long commentId, UpdateCommentRequest request);
     void deleteComment(Long commentId);
     PaginatedResponse<CommentWithUserResponse> getCommentsByArticle(Long articleId, Pageable pageable);
-    PaginatedResponse<CommentWithUserResponse> getCommentsByUser(Long userId, Pageable pageable);
+    PaginatedResponse<CommentWithUserResponse> getCommentsByUser(Pageable pageable);
 }

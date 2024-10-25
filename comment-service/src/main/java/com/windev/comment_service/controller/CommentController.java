@@ -11,7 +11,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @RequiredArgsConstructor
 @RestController
@@ -24,7 +29,8 @@ public class CommentController {
         try {
             CommentDto commentDto = commentService.addComment(request);
             return new ResponseEntity<>(commentDto, HttpStatus.CREATED);
-        }catch(Exception e){
+        }
+        catch(Exception e){
             return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
@@ -41,12 +47,11 @@ public class CommentController {
         }
     }
 
-    @GetMapping("/users/{userId}")
+    @GetMapping("/history")
     public ResponseEntity<?> getCommentsByUser(
-            @PathVariable Long userId,
             Pageable pageable) {
         try {
-            PaginatedResponse<CommentWithUserResponse> comments = commentService.getCommentsByUser(userId, pageable);
+            PaginatedResponse<CommentWithUserResponse> comments = commentService.getCommentsByUser(pageable);
             return new ResponseEntity<>(comments, HttpStatus.OK);
         }catch(Exception e){
             return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -74,6 +79,16 @@ public class CommentController {
     }
 
 
-
-
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public Map<String, String> handleValidationExceptions(
+            MethodArgumentNotValidException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getAllErrors().forEach((error) -> {
+            String fieldName = ((FieldError) error).getField();
+            String errorMessage = error.getDefaultMessage();
+            errors.put(fieldName, errorMessage);
+        });
+        return errors;
+    }
 }
