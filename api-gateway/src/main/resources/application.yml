@@ -4,14 +4,31 @@ spring:
   cloud:
     gateway:
       routes:
+        ## User authentication service.
         - id: user-service
           uri: http://localhost:8081
           predicates:
             - Path=/api/v1/auth/**
+
+        ## Article service
         - id: article-service
           uri: lb://article-service
           predicates:
             - Path=/api/v1/articles/**
+
+        # Public route for getting comments by article
+        - id: comment-service-public
+          uri: lb://comment-service
+          predicates:
+            - Path=/api/v1/comments/article/**
+
+        # Private routes for other comment endpoints (requires authentication)
+        - id: comment-service-private
+          uri: lb://comment-service
+          predicates:
+            - Path=/api/v1/comments/**
+          filters:
+            - name: AuthenticationFilter # Apply authentication to this route
 
 server:
   port: 9191
