@@ -1,6 +1,7 @@
 package com.windev.user_service.service.impl;
 
 import com.windev.user_service.config.CustomUserDetails;
+import com.windev.user_service.dto.request.PasswordResetRequest;
 import com.windev.user_service.dto.response.UserDto;
 import com.windev.user_service.entity.Role;
 import com.windev.user_service.entity.User;
@@ -11,6 +12,7 @@ import com.windev.user_service.dto.request.SignupRequest;
 import com.windev.user_service.repository.RoleRepository;
 import com.windev.user_service.repository.UserRepository;
 import com.windev.user_service.service.AuthService;
+import com.windev.user_service.util.EmailUtil;
 import com.windev.user_service.util.JwtTokenUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,9 +24,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
@@ -37,6 +38,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper userMapper;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenUtil jwtTokenUtil;
+    private final EmailUtil emailUtil;
 
 
     @Override
@@ -96,4 +98,47 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
         return userMapper.toDto(user);
     }
+
+    @Override
+    public void initiatePasswordReset(String email) {
+        User existingUser = userRepository
+                .findByEmail(email)
+                .orElseThrow(() -> new GlobalException("Not found user with email: " + email, HttpStatus.NOT_FOUND));
+
+
+
+        String token = UUID.randomUUID().toString();
+        existingUser.setResetToken(token);
+        existingUser.setResetTokenExpiration(new Date(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(5)));
+        userRepository.save(existingUser);
+
+        String resetLink = "http://localhost:8080/api/v1/auth/reset-password?token=" + token;
+        emailUtil.sendMail(existingUser.getEmail(), "Password Reset Request", "Click the link to reset your password: " + resetLink);
+    }
+
+    @Override
+    public boolean resetPassword(String token, PasswordResetRequest passwordResetRequest) {
+        User existingUser = userRepository.findByResetToken(token).orElseThrow(() -> new GlobalException("Invalid token!!!", HttpStatus.BAD_REQUEST));
+
+        if(new Date().after(existingUser.getResetTokenExpiration())){
+            throw new GlobalException("Token is expired!!!",HttpStatus.BAD_REQUEST);
+        }
+
+        if(existingUser.getResetTokenExpiration().after(new Date())){
+            if(!passwordResetRequest.getNewPassword().equals(passwordResetRequest.getConfirmPassword())){
+                return false;
+            }
+
+            existingUser.setPassword(passwordEncoder.encode(passwordResetRequest.getNewPassword()));
+            existingUser.setResetToken(null);
+            existingUser.setResetTokenExpiration(null);
+
+            userRepository.save(existingUser);
+            return true;
+        }
+
+        return false;
+    }
+
+
 }

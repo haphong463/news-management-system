@@ -1,10 +1,13 @@
 package com.windev.user_service.controller;
 
+import com.windev.user_service.dto.request.PasswordResetRequest;
 import com.windev.user_service.dto.response.UserDto;
 import com.windev.user_service.entity.User;
 import com.windev.user_service.dto.request.SigninRequest;
 import com.windev.user_service.dto.request.SignupRequest;
 import com.windev.user_service.service.AuthService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,9 +17,9 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/auth")
+@RequiredArgsConstructor
 public class AuthController {
-    @Autowired
-    private AuthService authService;
+    private final AuthService authService;
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@RequestBody SignupRequest user){
@@ -56,4 +59,28 @@ public class AuthController {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@RequestParam("email") String email){
+        try {
+            authService.initiatePasswordReset(email);
+            return new ResponseEntity<>("Password reset link has been sent to your email.", HttpStatus.OK);
+        }catch(Exception e){
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestParam("token") String token, @Valid @RequestBody PasswordResetRequest passwordResetRequest){
+        try {
+
+
+            authService.resetPassword(token, passwordResetRequest);
+            return new ResponseEntity<>("Password has been reset successfully.", HttpStatus.OK);
+        }catch(Exception e){
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+
 }

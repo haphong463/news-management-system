@@ -2,6 +2,10 @@ server:
   port: 8081
 
 spring:
+  profiles:
+    active: dev
+  application:
+    name: user-service
   datasource:
     url: jdbc:postgresql://localhost:5432/user_db
     username: postgres
@@ -19,3 +23,6 @@ eureka:
   client:
     serviceUrl:
       defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}

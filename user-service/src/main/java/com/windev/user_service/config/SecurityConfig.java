@@ -55,7 +55,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(expressionInterceptUrlRegistry -> expressionInterceptUrlRegistry
                         .requestMatchers(HttpMethod.GET).permitAll()
                         .requestMatchers(
-                                "/api/v1/auth/login", "/api/v1/auth/register", "/swagger-ui/**", "/v3/api-docs/**, /api/v1/users/**"
+                                "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/forgot-password", "/api/v1/auth/reset-password",  "/swagger-ui/**", "/v3/api-docs/**, /api/v1/users/**"
                         ).permitAll().
 
                         anyRequest().authenticated());

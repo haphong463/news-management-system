@@ -3,6 +3,7 @@ package com.windev.user_service.entity;
 import lombok.*;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.Set;
 
 @Entity
@@ -33,6 +34,10 @@ public class User {
 
     @Column(name = "is_enabled", columnDefinition = "BOOLEAN NOT NULL", nullable = false)
     private Boolean enabled = true;
+
+    private String resetToken;
+
+    private Date resetTokenExpiration;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
