@@ -1,10 +1,12 @@
 package com.windev.user_service.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.windev.user_service.config.CustomUserDetails;
 import com.windev.user_service.dto.request.PasswordResetRequest;
 import com.windev.user_service.dto.response.UserDto;
 import com.windev.user_service.entity.Role;
 import com.windev.user_service.entity.User;
+import com.windev.user_service.event.UserEvent;
 import com.windev.user_service.exception.GlobalException;
 import com.windev.user_service.mapper.UserMapper;
 import com.windev.user_service.dto.request.SigninRequest;
@@ -12,11 +14,11 @@ import com.windev.user_service.dto.request.SignupRequest;
 import com.windev.user_service.repository.RoleRepository;
 import com.windev.user_service.repository.UserRepository;
 import com.windev.user_service.service.AuthService;
-import com.windev.user_service.util.EmailUtil;
 import com.windev.user_service.util.JwtTokenUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -38,7 +40,8 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper userMapper;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenUtil jwtTokenUtil;
-    private final EmailUtil emailUtil;
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ObjectMapper objectMapper;
 
 
     @Override
@@ -60,6 +63,7 @@ public class AuthServiceImpl implements AuthService {
         User createdUser = userRepository.save(user);
         log.info("registerUser() --> Create a new user successfully!");
 
+        sendUserEvent(createdUser, "CREATE");
 
         return userMapper.toDto(createdUser);
     }
@@ -113,7 +117,6 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(existingUser);
 
         String resetLink = "http://localhost:8080/api/v1/auth/reset-password?token=" + token;
-        emailUtil.sendMail(existingUser.getEmail(), "Password Reset Request", "Click the link to reset your password: " + resetLink);
     }
 
     @Override
@@ -141,4 +144,16 @@ public class AuthServiceImpl implements AuthService {
     }
 
 
+    private void sendUserEvent(User user, String action){
+        UserEvent userEvent = new UserEvent();
+        userEvent.setEmail(user.getEmail());
+        userEvent.setAction(action);
+        try {
+            String eventAsString = objectMapper.writeValueAsString(userEvent);
+            kafkaTemplate.send("UserEvents",eventAsString);
+            log.info("sendUserEvent() --> event sent successfully: {}", eventAsString);
+        } catch (Exception e) {
+            log.error("sendUserEvent() --> Failed to send event to Kafka", e);
+        }
+    }
 }
