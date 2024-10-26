@@ -20,7 +20,7 @@ spring:
 #      properties:
 #        spring.json.trusted.packages: "*"
 #    topic:
-#      name: article_topic
+#        name: create_article_event
 
 eureka:
   client:

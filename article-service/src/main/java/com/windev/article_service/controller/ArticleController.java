@@ -80,5 +80,14 @@ public class ArticleController {
         }
     }
 
+    @PostMapping("/crawl-data")
+    public ResponseEntity<?> crawlData(){
+        try {
+            return new ResponseEntity<>(articleService.crawlNewsData(), HttpStatus.OK);
+        }catch(Exception e){
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
 
 }

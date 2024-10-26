@@ -14,5 +14,6 @@ public interface ArticleService {
     PaginatedResponseDto<ArticleDto> getArticlesByAuthor(Long authorId,Pageable pageable);
     ArticleDto updateArticle(Long articleId, UpdateArticleRequest updateArticleRequest);
     void deleteArticle(Long articleId);
+    String crawlNewsData();
 }
 
