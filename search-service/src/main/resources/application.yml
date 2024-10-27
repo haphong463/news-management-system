@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: search-service
+
+    elasticsearch:
+      uris: http://localhost:9200
+      rest:
+        connection-timeout: 1000
+        read-timeout: 3000
+      kafka:
+        consumer:
+          bootstrap-servers: localhost:9092
+          group-id: search-service-group
+          auto-offset-reset: earliest
+          key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+          value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+        producer:
+          key-serializer: org.apache.kafka.common.serialization.StringSerializer
+          value-serializer: org.apache.kafka.common.serialization.StringSerializer
