@@ -64,7 +64,7 @@ public class ArticleController {
             Sort sort = sortDir.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending()
                     : Sort.by(sortBy).descending();
             Pageable pageable = PageRequest.of(page, size, sort);
-            PaginatedResponseDto<ArticleDto> response = articleService.getArticlesByAuthor(authorId, pageable);
+            PaginatedResponseDto<ArticleDto> response = articleService.searchArticlesByAuthor(authorId, pageable);
 
             return new ResponseEntity<>(response, HttpStatus.OK);
         }catch(Exception e){

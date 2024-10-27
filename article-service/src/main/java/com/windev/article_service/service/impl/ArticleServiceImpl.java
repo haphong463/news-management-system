@@ -25,10 +25,12 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.util.*;
@@ -45,7 +47,28 @@ public class ArticleServiceImpl implements ArticleService {
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final SimpleRateLimiter rateLimiter = new SimpleRateLimiter(500);
+    private final RedisTemplate<String, Object> redisTemplate;
 
+    private static final String ARTICLE_CACHE_PREFIX = "article:";
+
+    @Override
+    public ArticleDto getArticleById(Long articleId) {
+        String cacheKey = ARTICLE_CACHE_PREFIX + articleId;
+
+        ArticleDto cachedArticle = (ArticleDto) redisTemplate.opsForValue().get(cacheKey);
+        if (cachedArticle != null) {
+            log.info("getArticleById() --> Returning cached article for ID: {}", articleId);
+            return cachedArticle;
+        }
+
+        Article article = articleRepository.findById(articleId).orElseThrow((() -> new GlobalException("--> Not found article with id: " + articleId, HttpStatus.NOT_FOUND)));
+        ArticleDto articleDto = articleMapper.toDto(article);
+
+
+        redisTemplate.opsForValue().set(cacheKey, articleDto);
+
+        return articleDto;
+    }
 
     @Override
     public ArticleDto createArticle(CreateArticleRequest createArticleRequest) {
@@ -56,9 +79,17 @@ public class ArticleServiceImpl implements ArticleService {
         Article savedArticle = articleRepository.save(article);
         log.info("createArticle() --> CREATE ARTICLE OK: {}", savedArticle.getTitle());
 
-        sendContentEvent(savedArticle,"CREATED");
+        String cacheKey = ARTICLE_CACHE_PREFIX + savedArticle.getId();
 
-        return articleMapper.toDto(savedArticle);
+        ArticleDto articleDto = articleMapper.toDto(savedArticle);
+
+        redisTemplate.opsForValue().set(cacheKey, articleDto);
+
+        invalidateSearchCaches();
+
+        sendContentEvent(savedArticle, "CREATED");
+
+        return articleDto;
     }
 
     @Override
@@ -68,11 +99,23 @@ public class ArticleServiceImpl implements ArticleService {
 
     @Override
     public PaginatedResponseDto<ArticleDto> searchArticlesByTitle(String title, Pageable pageable) {
-        return convertToPaginatedResponseDto(articleRepository.findByTitleContainingIgnoreCase(title, pageable));
+        String cacheKey = "search:title:" + title + ":page:" + pageable.getPageNumber();
+
+        PaginatedResponseDto<ArticleDto> cachedResult = (PaginatedResponseDto<ArticleDto>) redisTemplate.opsForValue().get(cacheKey);
+        if (cachedResult != null) {
+            log.info("searchArticlesByTitle() --> Returning cached search result for title: {}", title);
+            return cachedResult;
+        }
+
+        PaginatedResponseDto<ArticleDto> result = convertToPaginatedResponseDto(articleRepository.findByTitleContainingIgnoreCase(title, pageable));
+
+        redisTemplate.opsForValue().set(cacheKey, result);
+
+        return result;
     }
 
     @Override
-    public PaginatedResponseDto<ArticleDto> getArticlesByAuthor(Long authorId, Pageable pageable) {
+    public PaginatedResponseDto<ArticleDto> searchArticlesByAuthor(Long authorId, Pageable pageable) {
         return convertToPaginatedResponseDto(articleRepository.findByAuthorId(authorId, pageable));
     }
 
@@ -83,7 +126,15 @@ public class ArticleServiceImpl implements ArticleService {
 
     @Override
     public void deleteArticle(Long articleId) {
+        Article existingArticle = articleRepository.findById(articleId)
+                .orElseThrow(() -> new GlobalException("Not found article with id: " + articleId, HttpStatus.NOT_FOUND));
 
+        articleRepository.delete(existingArticle);
+
+        String cacheKey = ARTICLE_CACHE_PREFIX + articleId;
+
+        redisTemplate.delete(cacheKey);
+        log.info("deleteArticle() --> Delete article with ID: {}", articleId);
     }
 
     @Override
@@ -96,7 +147,7 @@ public class ArticleServiceImpl implements ArticleService {
 
             Category category = categoryRepository.findByName("Tin tức").orElseThrow(() -> new GlobalException("Category not found with name: Tin tức", HttpStatus.NOT_FOUND));
 
-            Set<Category> categories = new HashSet<>();
+            List<Category> categories = new ArrayList<>();
             categories.add(category);
 
             // Sử dụng ExecutorService với một ThreadPool cố định
@@ -198,7 +249,7 @@ public class ArticleServiceImpl implements ArticleService {
         article.setSlug(slugify.slugify(createArticleRequest.getTitle()));
         article.setAuthorId(response.getBody().getId());
 
-        Set<Category> validatedCategories = new HashSet<>();
+        List<Category> validatedCategories = new ArrayList<>();
         for (String category : createArticleRequest.getCategoriesId()) {
             Category existingCategory = categoryRepository.findByName(category)
                     .orElseThrow(() -> {
@@ -210,4 +261,13 @@ public class ArticleServiceImpl implements ArticleService {
         article.setCategories(validatedCategories);
         return article;
     }
+
+    private void invalidateSearchCaches() {
+        Set<String> keys = redisTemplate.keys("search:title:*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+            log.info("invalidateSearchCaches() --> Cleared search caches");
+        }
+    }
+
 }

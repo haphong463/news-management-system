@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.Date;
+import java.util.List;
 import java.util.Set;
 
 @Data
@@ -17,5 +18,5 @@ public class ArticleDto {
     private Long authorId;
     private Date createdAt;
     private Date updatedAt;
-    private Set<CategoryDto> categories;
+    private List<String> categories;
 }
