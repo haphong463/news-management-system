@@ -11,6 +11,7 @@ import java.util.Set;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class User {
 
     @Id
@@ -34,6 +35,10 @@ public class User {
 
     @Column(name = "is_enabled", columnDefinition = "BOOLEAN NOT NULL", nullable = false)
     private Boolean enabled = true;
+
+    private String token;
+
+    private Date verifiedAt;
 
     private String resetToken;
 

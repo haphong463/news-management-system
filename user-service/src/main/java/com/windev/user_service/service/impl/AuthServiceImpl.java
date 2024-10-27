@@ -2,18 +2,23 @@ package com.windev.user_service.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.windev.user_service.config.CustomUserDetails;
+import com.windev.user_service.constant.EventConstant;
 import com.windev.user_service.dto.request.PasswordResetRequest;
 import com.windev.user_service.dto.response.UserDto;
 import com.windev.user_service.entity.Role;
 import com.windev.user_service.entity.User;
-import com.windev.user_service.event.UserEvent;
+import com.windev.user_service.event.EventMessage;
+import com.windev.user_service.event.PasswordResetEvent;
+import com.windev.user_service.event.UserRegisteredEvent;
 import com.windev.user_service.exception.GlobalException;
+import com.windev.user_service.exception.RoleNotFoundException;
 import com.windev.user_service.mapper.UserMapper;
 import com.windev.user_service.dto.request.SigninRequest;
 import com.windev.user_service.dto.request.SignupRequest;
 import com.windev.user_service.repository.RoleRepository;
 import com.windev.user_service.repository.UserRepository;
 import com.windev.user_service.service.AuthService;
+import com.windev.user_service.service.EventPublisherService;
 import com.windev.user_service.util.JwtTokenUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,32 +45,42 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper userMapper;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenUtil jwtTokenUtil;
-    private final KafkaTemplate<String, String> kafkaTemplate;
-    private final ObjectMapper objectMapper;
+    private final EventPublisherService eventPublisherService;
 
 
     @Override
     public UserDto registerUser(SignupRequest signupRequest) {
-        User user = new User();
-        user.setUsername(signupRequest.getUsername());
-        user.setEmail(signupRequest.getEmail());
-        user.setPassword(passwordEncoder.encode(signupRequest.getPassword()));
-        Role role = roleRepository.findByRoleName("User").orElseThrow(() -> {
-            log.warn("registerUser() --> Role not found");
-            return new RuntimeException("Role not found");
-        });
+        User createdUser = createUser(signupRequest);
 
-        Set<Role> roles = new HashSet<>();
-        roles.add(role);
+        UserRegisteredEvent event = UserRegisteredEvent.builder()
+                .username(createdUser.getUsername())
+                .email(createdUser.getEmail())
+                .token(createdUser.getToken())
+                .build();
 
-        user.setRoles(roles);
-
-        User createdUser = userRepository.save(user);
-        log.info("registerUser() --> Create a new user successfully!");
-
-        sendUserEvent(createdUser, "CREATE");
+        eventPublisherService.publishEvent(EventConstant.USER_REGISTERED, event);
 
         return userMapper.toDto(createdUser);
+    }
+
+    private User createUser(SignupRequest signupRequest) {
+        User user = User.builder()
+                .username(signupRequest.getUsername())
+                .email(signupRequest.getEmail())
+                .password(passwordEncoder.encode(signupRequest.getPassword()))
+                .token(UUID.randomUUID().toString())
+                .roles(getUserRoles())
+                .build();
+
+        User createdUser = userRepository.save(user);
+        log.info("registerUser() --> Created a new user successfully: {}", createdUser.getUsername());
+        return createdUser;
+    }
+
+    private Set<Role> getUserRoles() {
+        Role role = roleRepository.findByRoleName("User")
+                .orElseThrow(() -> new RoleNotFoundException("Role 'User' not found"));
+        return new HashSet<>(Collections.singletonList(role));
     }
 
 
@@ -86,20 +101,22 @@ public class AuthServiceImpl implements AuthService {
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        CustomUserDetails customUserDetails = (CustomUserDetails) authentication.getPrincipal();
+        String token = jwtTokenUtil.generateToken(authentication);
+        log.info("login() --> User '{}' logged in successfully", signinRequest.getUsername());
 
-
-        return jwtTokenUtil.generateToken(authentication);
+        return token;
     }
 
     @Override
     public UserDto getMe() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String username = authentication.getName(); // Lấy username từ authentication
+        String username = authentication.getName();
 
-        // Giả sử chúng ta có một phương thức để lấy user dựa trên username
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
+        log.info("getMe() --> Retrieved details for user: {}", username);
+
         return userMapper.toDto(user);
     }
 
@@ -109,51 +126,43 @@ public class AuthServiceImpl implements AuthService {
                 .findByEmail(email)
                 .orElseThrow(() -> new GlobalException("Not found user with email: " + email, HttpStatus.NOT_FOUND));
 
-
-
         String token = UUID.randomUUID().toString();
-        existingUser.setResetToken(token);
-        existingUser.setResetTokenExpiration(new Date(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(5)));
-        userRepository.save(existingUser);
+        Date expiration = new Date(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(5));
 
-        String resetLink = "http://localhost:8080/api/v1/auth/reset-password?token=" + token;
+        existingUser.setResetToken(token);
+        existingUser.setResetTokenExpiration(expiration);
+        userRepository.save(existingUser);
+        log.info("initiatePasswordReset() --> Password reset token generated for user: {}", existingUser.getUsername());
+
+        PasswordResetEvent event = PasswordResetEvent.builder()
+                .username(existingUser.getUsername())
+                .resetToken(existingUser.getResetToken())
+                .email(existingUser.getEmail())
+                .build();
+
+        eventPublisherService.publishEvent(EventConstant.PASSWORD_RESET, event);
     }
 
     @Override
     public boolean resetPassword(String token, PasswordResetRequest passwordResetRequest) {
         User existingUser = userRepository.findByResetToken(token).orElseThrow(() -> new GlobalException("Invalid token!!!", HttpStatus.BAD_REQUEST));
 
-        if(new Date().after(existingUser.getResetTokenExpiration())){
-            throw new GlobalException("Token is expired!!!",HttpStatus.BAD_REQUEST);
+        Date now = new Date();
+        if (now.after(existingUser.getResetTokenExpiration())) {
+            throw new GlobalException("Token is expired!!!", HttpStatus.BAD_REQUEST);
         }
 
-        if(existingUser.getResetTokenExpiration().after(new Date())){
-            if(!passwordResetRequest.getNewPassword().equals(passwordResetRequest.getConfirmPassword())){
-                return false;
-            }
 
-            existingUser.setPassword(passwordEncoder.encode(passwordResetRequest.getNewPassword()));
-            existingUser.setResetToken(null);
-            existingUser.setResetTokenExpiration(null);
-
-            userRepository.save(existingUser);
-            return true;
+        if (!passwordResetRequest.getNewPassword().equals(passwordResetRequest.getConfirmPassword())) {
+            log.warn("resetPassword() --> Password and confirm password do not match for user: {}", existingUser.getUsername());
+            return false;
         }
 
-        return false;
-    }
-
-
-    private void sendUserEvent(User user, String action){
-        UserEvent userEvent = new UserEvent();
-        userEvent.setEmail(user.getEmail());
-        userEvent.setAction(action);
-        try {
-            String eventAsString = objectMapper.writeValueAsString(userEvent);
-            kafkaTemplate.send("UserEvents",eventAsString);
-            log.info("sendUserEvent() --> event sent successfully: {}", eventAsString);
-        } catch (Exception e) {
-            log.error("sendUserEvent() --> Failed to send event to Kafka", e);
-        }
+        existingUser.setPassword(passwordEncoder.encode(passwordResetRequest.getNewPassword()));
+        existingUser.setResetToken(null);
+        existingUser.setResetTokenExpiration(null);
+        userRepository.save(existingUser);
+        log.info("resetPassword() --> Password reset successfully for user: {}", existingUser.getUsername());
+        return true;
     }
 }
