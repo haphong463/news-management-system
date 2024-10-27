@@ -32,6 +32,19 @@ public class ArticleController {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+
+    @GetMapping("{id}")
+    public ResponseEntity<?> getArticleById(@PathVariable("id") Long id) {
+        try {
+            ArticleDto response = articleService.getArticleById(id);
+
+            return new ResponseEntity<>(response, HttpStatus.OK);
+        }catch(Exception e){
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+
     @GetMapping("/search")
     public ResponseEntity<?> searchArticlesByTitle(
             @RequestParam String title,
