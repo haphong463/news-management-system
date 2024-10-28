@@ -69,6 +69,7 @@ public class AuthServiceImpl implements AuthService {
                 .email(signupRequest.getEmail())
                 .password(passwordEncoder.encode(signupRequest.getPassword()))
                 .token(UUID.randomUUID().toString())
+                .enabled(false)
                 .roles(getUserRoles())
                 .build();
 
