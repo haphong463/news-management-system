@@ -29,18 +29,18 @@ public class PasswordResetStrategy implements NotificationStrategy {
         log.info("--> Send a password reset email: {}", data);
 
         String to = event.getEmail();
-        String subject = "Đặt lại mật khẩu của bạn";
+        String subject = "Reset Your Password";
 
-        // Định nghĩa các placeholder và giá trị tương ứng
+        // Define placeholders and their corresponding values
         Map<String, String> placeholders = new HashMap<>();
-        placeholders.put("Tên Người Nhận", event.getUsername());
-        placeholders.put("Link Đặt Lại Mật khẩu", "link reset email");
-        placeholders.put("Tên Công ty", "Công ty XYZ");
-        placeholders.put("Địa chỉ Công ty", "123 Đường ABC, Thành phố XYZ");
-        placeholders.put("Liên hệ", "contact@xyz.com");
+        placeholders.put("Company Name", "Your Company Name");
+        placeholders.put("Password Reset Link", "passwordresetlink");
+        placeholders.put("Company Address", "123 ABC Street, City XYZ");
+        placeholders.put("Contact Information", "contact@yourcompany.com");
+        placeholders.put("Recipient Name", event.getUsername());
 
         try {
-            String htmlContent = emailService.getTemplateContent("templates/password_reset.html", placeholders);
+            String htmlContent = emailService.getTemplateContent("email-templates/password_reset.html", placeholders);
             emailService.sendEmailHtml(to, subject, htmlContent);
             log.info("Password reset email sent to {}", to);
         } catch (IOException e) {

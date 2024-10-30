@@ -29,18 +29,18 @@ public class UserRegisteredStrategy implements NotificationStrategy {
         log.info("--> Send a registration welcome email: {}", data);
 
         String to = event.getEmail();
-        String subject = "Chào mừng đến với Công ty XYZ";
+        String subject = "Welcome to [[Company Name]]";
 
-        // Định nghĩa các placeholder và giá trị tương ứng
+        // Define placeholders and their corresponding values
         Map<String, String> placeholders = new HashMap<>();
-        placeholders.put("Tên Người Nhận", event.getUsername());
-        placeholders.put("Link Xác Nhận", "http://localhost:8081/api/v1/confirm");
-        placeholders.put("Tên Công ty", "Công ty XYZ");
-        placeholders.put("Địa chỉ Công ty", "123 Đường ABC, Thành phố XYZ");
-        placeholders.put("Liên hệ", "contact@xyz.com");
+        placeholders.put("Company Name", "Your Company Name");
+        placeholders.put("Confirmation Link", "confirmlink");
+        placeholders.put("Company Address", "123 ABC Street, City XYZ");
+        placeholders.put("Contact Information", "contact@yourcompany.com");
+        placeholders.put("Recipient Name", event.getUsername());
 
         try {
-            String htmlContent = emailService.getTemplateContent("templates/user_registered.html", placeholders);
+            String htmlContent = emailService.getTemplateContent("email-templates/user_registered.html", placeholders);
             emailService.sendEmailHtml(to, subject, htmlContent);
             log.info("Registration email sent to {}", to);
         } catch (IOException e) {

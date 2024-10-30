@@ -1,11 +1,8 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>Bài viết mới từ [[companyName]]</title>
-    <style>
-        /* CSS nội tuyến hoặc liên kết */
-    </style>
+    <title>New Article from [[Company Name]]</title>
 </head>
 <body style="margin:0; padding:0; font-family: Arial, sans-serif; background-color:#f4f4f4;">
 <table width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -14,17 +11,17 @@
             <table width="600" cellpadding="20" cellspacing="0" border="0" style="background-color:#ffffff; margin-top:50px; border-radius:8px;">
                 <tr>
                     <td>
-                        <h2 style="color:#333333;">Chào [[userName],</h2>
-                        <p style="color:#555555;">Chúng tôi vừa đăng tải một bài viết mới mà bạn có thể quan tâm:</p>
-                        <h3 style="color:#28a745;">[[articleTitle]</h3>
-                        <p style="color:#555555;">[[articleDescription]]</p>
-                        <a href="[[${articleLink}]]" style="display:inline-block; padding:10px 20px; background-color:#007bff; color:#ffffff; text-decoration:none; border-radius:5px;">Đọc thêm</a>
+                        <h2 style="color:#333333;">Hello [[Recipient Name]],</h2>
+                        <p style="color:#555555;">We've just published a new article that you might find interesting:</p>
+                        <h3 style="color:#28a745;">[[Article Title]]</h3>
+                        <p style="color:#555555;">[[Short Description of the Article...]]</p>
+                        <a href="[[Article Link]]" style="display:inline-block; padding:10px 20px; background-color:#007bff; color:#ffffff; text-decoration:none; border-radius:5px;">Read More</a>
                     </td>
                 </tr>
                 <tr>
                     <td style="background-color:#f9f9f9; text-align:center; color:#777777; font-size:12px;">
-                        <p>Bạn nhận được email này vì đã đăng ký nhận thông báo từ [[companyName]].</p>
-                        <p>[[companyAddress]] | [[contact]]</p>
+                        <p>You are receiving this email because you subscribed to notifications from [[Company Name]].</p>
+                        <p>[[Company Address]] | [[Contact Information]]</p>
                     </td>
                 </tr>
             </table>
