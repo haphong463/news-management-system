@@ -1,14 +1,13 @@
-package com.windev.article_service.service.impl;
+package com.windev.article_service.service.category;
 
-import com.windev.article_service.dto.request.CreateCategoryRequest;
-import com.windev.article_service.dto.request.UpdateCategoryRequest;
+import com.windev.article_service.dto.request.category.CreateCategoryRequest;
+import com.windev.article_service.dto.request.category.UpdateCategoryRequest;
 import com.windev.article_service.dto.response.CategoryDto;
 import com.windev.article_service.dto.response.PaginatedResponseDto;
 import com.windev.article_service.entity.Category;
 import com.windev.article_service.exception.GlobalException;
 import com.windev.article_service.mapper.CategoryMapper;
 import com.windev.article_service.repository.CategoryRepository;
-import com.windev.article_service.service.CategoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -94,4 +93,7 @@ public class CategoryServiceImpl implements CategoryService {
                 .orElseThrow(() -> new GlobalException("Not found category ID: " + id, HttpStatus.NOT_FOUND));
         return categoryMapper.toDto(existingCategory);
     }
+
+
+
 }

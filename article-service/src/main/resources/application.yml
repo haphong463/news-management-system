@@ -53,6 +53,10 @@ management:
     health:
       show-details: always
 
+app:
+  upload:
+    dir: src/main/resources/static/uploads
+
 info:
   app:
     name: "Article Service"

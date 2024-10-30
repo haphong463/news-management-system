@@ -19,4 +19,20 @@ public class ArticleDto {
     private Date createdAt;
     private Date updatedAt;
     private List<String> categories;
+    private String mainImage;
+    private String thumbnailImage;
+
+    public String getMainImage() {
+        if (mainImage != null) {
+            return "/uploads/" + mainImage;
+        }
+        return null;
+    }
+
+    public String getThumbnailImage() {
+        if (thumbnailImage != null) {
+            return "/uploads/" + thumbnailImage;
+        }
+        return null;
+    }
 }

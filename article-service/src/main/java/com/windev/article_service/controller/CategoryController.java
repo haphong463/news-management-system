@@ -1,9 +1,9 @@
 package com.windev.article_service.controller;
 
-import com.windev.article_service.dto.request.CreateCategoryRequest;
+import com.windev.article_service.dto.request.category.CreateCategoryRequest;
 import com.windev.article_service.dto.response.CategoryDto;
 import com.windev.article_service.dto.response.PaginatedResponseDto;
-import com.windev.article_service.service.CategoryService;
+import com.windev.article_service.service.category.CategoryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -11,8 +11,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/categories")

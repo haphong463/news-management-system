@@ -1,4 +1,4 @@
-package com.windev.article_service.dto.request;
+package com.windev.article_service.dto.request.category;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;

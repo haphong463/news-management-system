@@ -1,12 +1,10 @@
-package com.windev.article_service.service;
+package com.windev.article_service.service.category;
 
-import com.windev.article_service.dto.request.CreateCategoryRequest;
-import com.windev.article_service.dto.request.UpdateCategoryRequest;
+import com.windev.article_service.dto.request.category.CreateCategoryRequest;
+import com.windev.article_service.dto.request.category.UpdateCategoryRequest;
 import com.windev.article_service.dto.response.CategoryDto;
 import com.windev.article_service.dto.response.PaginatedResponseDto;
 import org.springframework.data.domain.Pageable;
-
-import java.util.List;
 
 public interface CategoryService {
     CategoryDto addCategory(CreateCategoryRequest createCategoryRequest);
