@@ -7,6 +7,7 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
+        <module name="config-server" />
         <module name="comment-service" />
         <module name="article-service" />
         <module name="search-service" />
@@ -23,6 +24,7 @@
       <module name="api-gateway" options="-parameters" />
       <module name="article-service" options="-parameters" />
       <module name="comment-service" options="-parameters" />
+      <module name="config-server" options="-parameters" />
       <module name="discovery-service" options="-parameters" />
       <module name="notification-service" options="-parameters" />
       <module name="reaction-service" options="-parameters" />
