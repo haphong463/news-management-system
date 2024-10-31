@@ -1,10 +1,13 @@
 package com.windev.article_service.util;
 
 import com.windev.article_service.exception.GlobalException;
+import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import net.coobird.thumbnailator.Thumbnails;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -12,11 +15,29 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import java.util.concurrent.CompletableFuture;
+
+@Service
 @Slf4j
 public class FileUpload {
+
     @Value("${app.upload.dir}")
-    private static String uploadDir;
-    public static String saveImage(MultipartFile file) {
+    private String uploadDir;
+
+    @Async("taskExecutor")
+    public CompletableFuture<String> saveImageAsync(String uniqueFileName, MultipartFile file) {
+        return CompletableFuture.supplyAsync(() -> saveImage(uniqueFileName, file));
+    }
+
+    @Async("taskExecutor")
+    public CompletableFuture<String> createThumbnailAsync(String uniqueFileName) {
+        return CompletableFuture.supplyAsync(() -> createThumbnail(uniqueFileName));
+    }
+
+    public String saveImage(String uniqueFileName, MultipartFile file) {
         // Kiểm tra loại file
         String contentType = file.getContentType();
         if (!isImage(contentType)) {
@@ -38,34 +59,26 @@ public class FileUpload {
             }
 
             // Tạo tên file duy nhất
-            String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
-            Path filePath = uploadPath.resolve(fileName);
+            Path filePath = uploadPath.resolve(uniqueFileName);
             file.transferTo(filePath.toFile());
 
             log.info("saveImage() --> Image saved to: {}", filePath.toString());
 
-            return fileName;
+            return uniqueFileName;
         } catch (IOException e) {
             log.error("saveImage() --> Failed to save image", e);
             throw new GlobalException("Failed to save image", HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
-    public static boolean isImage(String contentType) {
-        return contentType.equalsIgnoreCase("image/jpeg") ||
-                contentType.equalsIgnoreCase("image/png") ||
-                contentType.equalsIgnoreCase("image/jpg") ||
-                contentType.equalsIgnoreCase("image/gif");
-    }
-
-    public static String createThumbnail(String mainImagePath) {
+    public String createThumbnail(String uniqueFileName) {
         try {
             String projectDir = System.getProperty("user.dir");
             Path uploadPath = Paths.get(projectDir, uploadDir);
-            String thumbnailName = "thumb_" + mainImagePath;
+            String thumbnailName = "thumb_" + uniqueFileName;
             Path thumbnailPath = uploadPath.resolve(thumbnailName);
 
-            Thumbnails.of(uploadPath.resolve(mainImagePath).toFile())
+            Thumbnails.of(uploadPath.resolve(uniqueFileName).toFile())
                     .size(150, 150)
                     .toFile(thumbnailPath.toFile());
 
@@ -76,5 +89,12 @@ public class FileUpload {
             log.error("createThumbnail() --> Failed to create thumbnail", e);
             throw new GlobalException("Failed to create thumbnail", HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    public boolean isImage(String contentType) {
+        return contentType.equalsIgnoreCase("image/jpeg") ||
+                contentType.equalsIgnoreCase("image/png") ||
+                contentType.equalsIgnoreCase("image/jpg") ||
+                contentType.equalsIgnoreCase("image/gif");
     }
 }

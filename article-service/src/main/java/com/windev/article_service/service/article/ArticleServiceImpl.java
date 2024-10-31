@@ -53,6 +53,8 @@ public class ArticleServiceImpl implements ArticleService {
     private final ArticleRepository articleRepository;
     private final ArticleMapper articleMapper;
     private final UserClient userClient;
+    private final FileUpload fileUpload;
+
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final SimpleRateLimiter rateLimiter = new SimpleRateLimiter(500);
@@ -88,9 +90,8 @@ public class ArticleServiceImpl implements ArticleService {
     @Override
     @Transactional
     public ArticleDto createArticle(CreateArticleRequest createArticleRequest) {
-        Article article = prepareNewArticle(createArticleRequest);
+        Article savedArticle = prepareNewArticle(createArticleRequest);
 
-        Article savedArticle = articleRepository.save(article);
         log.info("createArticle() --> CREATE ARTICLE OK: {}", savedArticle.getTitle());
 
         ArticleDto articleDto = articleMapper.toDto(savedArticle);
@@ -101,7 +102,7 @@ public class ArticleServiceImpl implements ArticleService {
         invalidateSearchCaches();
 
         // send event to notifications topic
-        sendContentEvent(savedArticle, "CREATED");
+//        sendContentEvent(savedArticle, "CREATED");
 
         return articleDto;
     }
@@ -264,15 +265,15 @@ public class ArticleServiceImpl implements ArticleService {
     }
 
     private void updateImages(Article article, MultipartFile mainImageFile) {
-        // Lưu hình ảnh chính
-        String mainImagePath = FileUpload.saveImage(mainImageFile);
-        article.setMainImage(mainImagePath);
+//        // Lưu hình ảnh chính
+//        String mainImagePath = fileUpload.saveImage(mainImageFile);
+//        article.setMainImage(mainImagePath);
+//
+//        // Tạo và lưu hình thu nhỏ
+//        String thumbnailPath = fileUpload.createThumbnail(mainImagePath);
+//        article.setThumbnailImage(thumbnailPath);
 
-        // Tạo và lưu hình thu nhỏ
-        String thumbnailPath = FileUpload.createThumbnail(mainImagePath);
-        article.setThumbnailImage(thumbnailPath);
-
-        log.info("updateImages() --> Images updated: mainImage={}, thumbnailImage={}", mainImagePath, thumbnailPath);
+//        log.info("updateImages() --> Images updated: mainImage={}, thumbnailImage={}", mainImagePath, thumbnailPath);
     }
 
     private void updateArticleCache(Article article) {
@@ -306,33 +307,66 @@ public class ArticleServiceImpl implements ArticleService {
         return new PaginatedResponseDto<>(articles, articlePage.getNumber(), articlePage.getSize(),
                 articlePage.getTotalPages(), articlePage.getTotalElements(), articlePage.isLast());
     }
-    private Article prepareNewArticle(CreateArticleRequest createArticleRequest) {
+    public Article prepareNewArticle(CreateArticleRequest createArticleRequest) {
         final Slugify slugify = Slugify.builder().build();
         ResponseEntity<UserDto> response = userClient.getCurrentUser();
-         String thumbnailPath = "";
-            String mainImagePath = "";
 
-            if (createArticleRequest.getMainImage() != null && !createArticleRequest.getMainImage().isEmpty()) {
-                mainImagePath = FileUpload.saveImage(createArticleRequest.getMainImage());
+        String mainImageFileName;
+        String thumbnailFileName = "";
 
-                // Tạo thumbnail từ ảnh chính
-                thumbnailPath = FileUpload.createThumbnail(mainImagePath);
-            }
+        if (createArticleRequest.getMainImage() != null && !createArticleRequest.getMainImage().isEmpty()) {
+            // Tạo unique file name cho hình ảnh chính
+            String originalFileName = createArticleRequest.getMainImage().getOriginalFilename();
+            String fileExtension = originalFileName.substring(originalFileName.lastIndexOf("."));
+            mainImageFileName = UUID.randomUUID().toString() + fileExtension;
+            thumbnailFileName = "thumb_" + mainImageFileName;
+        } else {
+            mainImageFileName = "";
+        }
 
+        Article article = Article.builder()
+                .title(createArticleRequest.getTitle())
+                .content(createArticleRequest.getContent())
+                .slug(slugify.slugify(createArticleRequest.getTitle()))
+                .authorId(response.getBody().getId())
+                .thumbnailImage(thumbnailFileName) // Lưu thumbnail path ban đầu
+                .mainImage(mainImageFileName) // Lưu main image path ban đầu
+                .build();
 
-            Article article = Article.builder()
-                    .title(createArticleRequest.getTitle())
-                    .content(createArticleRequest.getContent())
-                    .slug(slugify.slugify(createArticleRequest.getTitle()))
-                    .authorId(response.getBody().getId())
-                    .thumbnailImage(thumbnailPath)
-                    .mainImage(mainImagePath)
-                    .build();
+        List<Category> validatedCategories = validateCategories(createArticleRequest.getCategoryNames());
+        article.setCategories(validatedCategories);
 
-            List<Category> validatedCategories = validateCategories(createArticleRequest.getCategoryNames());
-            article.setCategories(validatedCategories);
-            return article;
+        // Lưu bài viết vào cơ sở dữ liệu trước
+        Article savedArticle = articleRepository.save(article);
 
+        // Nếu có hình ảnh, xử lý bất đồng bộ
+        if (createArticleRequest.getMainImage() != null && !createArticleRequest.getMainImage().isEmpty()) {
+            MultipartFile mainImageFile = createArticleRequest.getMainImage();
+            CompletableFuture<Void> uploadFuture = fileUpload.saveImageAsync(mainImageFileName, mainImageFile)
+                    .thenAccept(mainImage -> {
+                        // Sau khi upload hình chính xong
+                        // Tiếp tục tạo thumbnail
+                        fileUpload.createThumbnailAsync(mainImageFileName)
+                                .thenAccept(thumbnail -> {
+                                    // Cập nhật thumbnail path vào cơ sở dữ liệu nếu cần
+                                    // Ở đây chúng ta đã lưu thumbnailFileName ban đầu nên không cần cập nhật
+                                    // Tuy nhiên, bạn có thể cập nhật lại nếu muốn thông tin chính xác hơn
+                                    // Ví dụ:
+                                    // savedArticle.setThumbnailImage(thumbnail);
+                                    // articleRepository.save(savedArticle);
+                                }).exceptionally(ex -> {
+                                    // Xử lý lỗi khi tạo thumbnail
+                                    log.error("Failed to create thumbnail", ex);
+                                    return null;
+                                });
+                    }).exceptionally(ex -> {
+                        // Xử lý lỗi khi upload hình chính
+                        log.error("Failed to upload main image", ex);
+                        return null;
+                    });
+        }
+
+        return savedArticle;
     }
 
     private List<Category> validateCategories(Set<String> categoryNames){
