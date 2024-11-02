@@ -29,18 +29,18 @@ public class UserRegisteredStrategy implements NotificationStrategy {
         log.info("--> Send a registration welcome email: {}", data);
 
         String to = event.getEmail();
-        String subject = "Welcome to [[Company Name]]";
+        String subject = "Welcome to The Medium News";
 
         // Define placeholders and their corresponding values
         Map<String, String> placeholders = new HashMap<>();
-        placeholders.put("Company Name", "Your Company Name");
-        placeholders.put("Confirmation Link", "confirmlink");
+        placeholders.put("Company Name", "The Medium News");
+        placeholders.put("Confirmation Link", "http://localhost:9191/api/v1/auth/verify?token=" + event.getToken());
         placeholders.put("Company Address", "123 ABC Street, City XYZ");
         placeholders.put("Contact Information", "contact@yourcompany.com");
         placeholders.put("Recipient Name", event.getUsername());
 
         try {
-            String htmlContent = emailService.getTemplateContent("email-templates/user_registered.html", placeholders);
+            String htmlContent = emailService.getTemplateContent("templates/user_registered.html", placeholders);
             emailService.sendEmailHtml(to, subject, htmlContent);
             log.info("Registration email sent to {}", to);
         } catch (IOException e) {

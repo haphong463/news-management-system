@@ -2,9 +2,7 @@ package com.windev.notification_service.listener;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.windev.notification_service.event.EventMessage;
-import com.windev.notification_service.event.PasswordResetEvent;
-import com.windev.notification_service.event.UserRegisteredEvent;
+import com.windev.notification_service.event.*;
 import com.windev.notification_service.handler.NotificationStrategy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +32,7 @@ public class NotificationEventListener {
                 Object deserializedData = deserializeData(eventType, data);
                 strategy.sendNotification(deserializedData);
                 log.info("handleEvents() --> Đã xử lý sự kiện: {}", eventType);
-            }else{
+            } else {
                 log.warn("handleEvents() --> Không tìm thấy chiến lược cho loại sự kiện: {}", eventType);
             }
 
@@ -49,6 +47,10 @@ public class NotificationEventListener {
                 return objectMapper.convertValue(data, UserRegisteredEvent.class);
             case "password-reset":
                 return objectMapper.convertValue(data, PasswordResetEvent.class);
+            case "new-article":
+                return objectMapper.convertValue(data, NewArticleEvent.class);
+            case "new-comment":
+                return objectMapper.convertValue(data, NewCommentEvent.class);
             // Add cases for other event types here
             default:
                 throw new IllegalArgumentException("Unknown event type: " + eventType);

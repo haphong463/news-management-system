@@ -40,7 +40,7 @@ public class PasswordResetStrategy implements NotificationStrategy {
         placeholders.put("Recipient Name", event.getUsername());
 
         try {
-            String htmlContent = emailService.getTemplateContent("email-templates/password_reset.html", placeholders);
+            String htmlContent = emailService.getTemplateContent("templates/password_reset.html", placeholders);
             emailService.sendEmailHtml(to, subject, htmlContent);
             log.info("Password reset email sent to {}", to);
         } catch (IOException e) {

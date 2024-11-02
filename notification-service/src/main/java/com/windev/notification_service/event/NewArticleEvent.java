@@ -10,6 +10,9 @@ import lombok.NoArgsConstructor;
 public class NewArticleEvent {
     private Long contentId;
     private String title;
-    private String action; // "CREATED", "UPDATED", "DELETED"
     private Long authorId;
+    private String email;
+    private String firstName;
+    private String lastName;
+    private String slug;
 }
