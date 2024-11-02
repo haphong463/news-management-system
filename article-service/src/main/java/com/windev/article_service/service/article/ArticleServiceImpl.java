@@ -21,6 +21,7 @@ import com.windev.article_service.util.SimpleRateLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.coobird.thumbnailator.Thumbnails;
+import net.javaguides.common_lib.EventMessage;
 import org.hibernate.sql.Update;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -66,7 +67,6 @@ public class ArticleServiceImpl implements ArticleService {
     private static final String NOTIFICATION_TOPIC = "notifications";
 
 
-
     @Override
     public ArticleDto getArticleById(Long articleId) {
         String cacheKey = ARTICLE_CACHE_PREFIX + articleId;
@@ -81,6 +81,17 @@ public class ArticleServiceImpl implements ArticleService {
 
         ArticleDto articleDto = articleMapper.toDto(article);
 
+        try {
+            UserDto userDto = userClient.getAuthor(article.getAuthorId()).getBody();
+
+            log.info("Fetch user from User Service OK: {}", userDto.toString());
+
+            articleDto.setFirstName(userDto.getFirstName());
+            articleDto.setLastName(userDto.getLastName());
+        } catch (Exception e) {
+            log.error("Error fetching user data for authorId: {}", article.getAuthorId());
+        }
+
         redisTemplate.opsForValue().set(cacheKey, articleDto);
         log.info("getArticleById() --> Article cached with id: {}", articleId);
 
@@ -90,21 +101,22 @@ public class ArticleServiceImpl implements ArticleService {
     @Override
     @Transactional
     public ArticleDto createArticle(CreateArticleRequest createArticleRequest) {
-        Article savedArticle = prepareNewArticle(createArticleRequest);
+        UserDto user = userClient.getCurrentUser().getBody();
+
+        ArticleDto savedArticle = prepareNewArticle(createArticleRequest, user);
 
         log.info("createArticle() --> CREATE ARTICLE OK: {}", savedArticle.getTitle());
 
-        ArticleDto articleDto = articleMapper.toDto(savedArticle);
         String cacheKey = ARTICLE_CACHE_PREFIX + savedArticle.getId();
 
-        redisTemplate.opsForValue().set(cacheKey, articleDto);
+        redisTemplate.opsForValue().set(cacheKey, savedArticle);
 
         invalidateSearchCaches();
 
         // send event to notifications topic
-//        sendContentEvent(savedArticle, "CREATED");
+        sendContentEvent(savedArticle, user);
 
-        return articleDto;
+        return savedArticle;
     }
 
     @Override
@@ -285,20 +297,28 @@ public class ArticleServiceImpl implements ArticleService {
         invalidateSearchCaches();
     }
 
-    private void sendContentEvent(Article article, String action) {
+    private void sendContentEvent(ArticleDto article, UserDto user) {
         try {
-            ContentEvent event = new ContentEvent();
-            event.setContentId(article.getId());
-            event.setTitle(article.getTitle());
-            event.setAction(action);
-            event.setAuthorId(article.getAuthorId());
+            ContentEvent event = ContentEvent.builder()
+                    .contentId(article.getId())
+                    .authorId(article.getAuthorId())
+                    .email(user.getEmail())
+                    .slug(article.getSlug())
+                    .title(article.getTitle())
+                    .firstName(user.getFirstName())
+                    .lastName(user.getLastName())
+                    .build();
 
-            String eventAsString = objectMapper.writeValueAsString(event);
+            EventMessage message = EventMessage.builder()
+                    .data(event)
+                    .eventType("new-article")
+                    .build();
+
+            String eventAsString = objectMapper.writeValueAsString(message);
             kafkaTemplate.send(NOTIFICATION_TOPIC, eventAsString);
             log.info("sendContentEvent() --> Event sent to Kafka: {}", eventAsString);
         } catch (Exception e) {
             log.error("sendContentEvent() --> Failed to send event to Kafka", e);
-            // Xử lý lỗi nếu cần
         }
     }
 
@@ -307,15 +327,14 @@ public class ArticleServiceImpl implements ArticleService {
         return new PaginatedResponseDto<>(articles, articlePage.getNumber(), articlePage.getSize(),
                 articlePage.getTotalPages(), articlePage.getTotalElements(), articlePage.isLast());
     }
-    public Article prepareNewArticle(CreateArticleRequest createArticleRequest) {
+
+    public ArticleDto prepareNewArticle(CreateArticleRequest createArticleRequest, UserDto user) {
         final Slugify slugify = Slugify.builder().build();
-        ResponseEntity<UserDto> response = userClient.getCurrentUser();
 
         String mainImageFileName;
         String thumbnailFileName = "";
 
         if (createArticleRequest.getMainImage() != null && !createArticleRequest.getMainImage().isEmpty()) {
-            // Tạo unique file name cho hình ảnh chính
             String originalFileName = createArticleRequest.getMainImage().getOriginalFilename();
             String fileExtension = originalFileName.substring(originalFileName.lastIndexOf("."));
             mainImageFileName = UUID.randomUUID().toString() + fileExtension;
@@ -328,48 +347,39 @@ public class ArticleServiceImpl implements ArticleService {
                 .title(createArticleRequest.getTitle())
                 .content(createArticleRequest.getContent())
                 .slug(slugify.slugify(createArticleRequest.getTitle()))
-                .authorId(response.getBody().getId())
-                .thumbnailImage(thumbnailFileName) // Lưu thumbnail path ban đầu
-                .mainImage(mainImageFileName) // Lưu main image path ban đầu
+                .authorId(user.getId())
+                .thumbnailImage(thumbnailFileName)
+                .mainImage(mainImageFileName)
                 .build();
 
         List<Category> validatedCategories = validateCategories(createArticleRequest.getCategoryNames());
         article.setCategories(validatedCategories);
 
-        // Lưu bài viết vào cơ sở dữ liệu trước
         Article savedArticle = articleRepository.save(article);
 
-        // Nếu có hình ảnh, xử lý bất đồng bộ
         if (createArticleRequest.getMainImage() != null && !createArticleRequest.getMainImage().isEmpty()) {
             MultipartFile mainImageFile = createArticleRequest.getMainImage();
-            CompletableFuture<Void> uploadFuture = fileUpload.saveImageAsync(mainImageFileName, mainImageFile)
+            fileUpload.saveImageAsync(mainImageFileName, mainImageFile)
                     .thenAccept(mainImage -> {
-                        // Sau khi upload hình chính xong
-                        // Tiếp tục tạo thumbnail
                         fileUpload.createThumbnailAsync(mainImageFileName)
                                 .thenAccept(thumbnail -> {
-                                    // Cập nhật thumbnail path vào cơ sở dữ liệu nếu cần
-                                    // Ở đây chúng ta đã lưu thumbnailFileName ban đầu nên không cần cập nhật
-                                    // Tuy nhiên, bạn có thể cập nhật lại nếu muốn thông tin chính xác hơn
-                                    // Ví dụ:
-                                    // savedArticle.setThumbnailImage(thumbnail);
-                                    // articleRepository.save(savedArticle);
                                 }).exceptionally(ex -> {
-                                    // Xử lý lỗi khi tạo thumbnail
                                     log.error("Failed to create thumbnail", ex);
                                     return null;
                                 });
                     }).exceptionally(ex -> {
-                        // Xử lý lỗi khi upload hình chính
                         log.error("Failed to upload main image", ex);
                         return null;
                     });
         }
 
-        return savedArticle;
+        ArticleDto articleDto = articleMapper.toDto(savedArticle);
+        articleDto.setFirstName(user.getFirstName());
+        articleDto.setLastName(user.getLastName());
+        return articleDto;
     }
 
-    private List<Category> validateCategories(Set<String> categoryNames){
+    private List<Category> validateCategories(Set<String> categoryNames) {
         List<Category> validatedCategories = new ArrayList<>();
         for (String category : categoryNames) {
             Category existingCategory = categoryRepository.findByName(category)

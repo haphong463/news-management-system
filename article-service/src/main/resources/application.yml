@@ -24,15 +24,15 @@ spring:
     cache:
       redis:
         time-to-live: 600000  # Thời gian tồn tại của cache (600 giây = 10 phút)
-#  kafka:
-#    producer:
-#      bootstrap-servers: localhost:9092
-#      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-#      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-#      properties:
-#        spring.json.trusted.packages: "*"
-#    topic:
-#        name: create_article_event
+  kafka:
+    producer:
+      bootstrap-servers: localhost:9092
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.trusted.packages: "*"
+    topic:
+        name: create_article_event
 
 eureka:
   client:

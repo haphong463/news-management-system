@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.util.List;
 import java.util.Set;
+import org.hibernate.annotations.DynamicInsert;
 
 @EqualsAndHashCode(callSuper = true)
 @Entity
@@ -20,6 +21,9 @@ public class Article extends AbstractEntity {
 
     @Column(nullable = false, length = 200, unique = true)
     private String title;
+
+    @Column(length = 500, nullable = false)
+    private String citation;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;

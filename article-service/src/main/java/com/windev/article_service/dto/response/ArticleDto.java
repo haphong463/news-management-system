@@ -16,8 +16,11 @@ public class ArticleDto {
     private String title;
     private String content;
     private Long authorId;
+    private String firstName;
+    private String lastName;
     private Date createdAt;
     private Date updatedAt;
+    private String slug;
     private List<String> categories;
     private String mainImage;
     private String thumbnailImage;
