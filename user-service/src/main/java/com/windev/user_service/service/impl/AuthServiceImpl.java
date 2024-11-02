@@ -7,6 +7,8 @@ import com.windev.user_service.dto.request.PasswordResetRequest;
 import com.windev.user_service.dto.response.UserDto;
 import com.windev.user_service.entity.Role;
 import com.windev.user_service.entity.User;
+import com.windev.user_service.entity.UserEmailVerification;
+import com.windev.user_service.entity.UserPasswordResetRequest;
 import com.windev.user_service.event.EventMessage;
 import com.windev.user_service.event.PasswordResetEvent;
 import com.windev.user_service.event.UserRegisteredEvent;
@@ -15,7 +17,9 @@ import com.windev.user_service.exception.RoleNotFoundException;
 import com.windev.user_service.mapper.UserMapper;
 import com.windev.user_service.dto.request.SigninRequest;
 import com.windev.user_service.dto.request.SignupRequest;
+import com.windev.user_service.repository.PasswordResetRepository;
 import com.windev.user_service.repository.RoleRepository;
+import com.windev.user_service.repository.UserEmailVerificationRepository;
 import com.windev.user_service.repository.UserRepository;
 import com.windev.user_service.service.AuthService;
 import com.windev.user_service.service.EventPublisherService;
@@ -33,6 +37,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Slf4j
@@ -40,6 +45,8 @@ import java.util.concurrent.TimeUnit;
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
+    private final UserEmailVerificationRepository verificationRepository;
+    private final PasswordResetRepository passwordResetRepository;
     private final PasswordEncoder passwordEncoder;
     private final RoleRepository roleRepository;
     private final UserMapper userMapper;
@@ -50,12 +57,21 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public UserDto registerUser(SignupRequest signupRequest) {
+        String token = UUID.randomUUID().toString();
         User createdUser = createUser(signupRequest);
+
+        UserEmailVerification emailVerification = UserEmailVerification.builder()
+                .verificationCode(token)
+                .user(createdUser)
+                .verifiedAt(null)
+                .build();
+
+        verificationRepository.save(emailVerification);
 
         UserRegisteredEvent event = UserRegisteredEvent.builder()
                 .username(createdUser.getUsername())
                 .email(createdUser.getEmail())
-                .token(createdUser.getToken())
+                .token(emailVerification.getVerificationCode())
                 .build();
 
         eventPublisherService.publishEvent(EventConstant.USER_REGISTERED, event);
@@ -64,17 +80,19 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private User createUser(SignupRequest signupRequest) {
+
         User user = User.builder()
                 .username(signupRequest.getUsername())
                 .email(signupRequest.getEmail())
+                .firstName(signupRequest.getFirstName())
+                .lastName(signupRequest.getLastName())
                 .password(passwordEncoder.encode(signupRequest.getPassword()))
-                .token(UUID.randomUUID().toString())
                 .enabled(false)
                 .roles(getUserRoles())
                 .build();
-
         User createdUser = userRepository.save(user);
         log.info("registerUser() --> Created a new user successfully: {}", createdUser.getUsername());
+
         return createdUser;
     }
 
@@ -83,7 +101,6 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new RoleNotFoundException("Role 'User' not found"));
         return new HashSet<>(Collections.singletonList(role));
     }
-
 
     @Override
     public Optional<User> getUserByUsername(String username) {
@@ -122,22 +139,25 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public void initiatePasswordReset(String email) {
         User existingUser = userRepository
                 .findByEmail(email)
                 .orElseThrow(() -> new GlobalException("Not found user with email: " + email, HttpStatus.NOT_FOUND));
 
+        UserPasswordResetRequest passwordResetRequest = passwordResetRepository.findByUser(existingUser).orElse(UserPasswordResetRequest.builder().user(existingUser).build());
+
         String token = UUID.randomUUID().toString();
         Date expiration = new Date(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(5));
 
-        existingUser.setResetToken(token);
-        existingUser.setResetTokenExpiration(expiration);
-        userRepository.save(existingUser);
+        passwordResetRequest.setVerificationCode(token);
+        passwordResetRequest.setVerificationCodeExpiration(expiration);
+        passwordResetRepository.save(passwordResetRequest);
         log.info("initiatePasswordReset() --> Password reset token generated for user: {}", existingUser.getUsername());
 
         PasswordResetEvent event = PasswordResetEvent.builder()
                 .username(existingUser.getUsername())
-                .resetToken(existingUser.getResetToken())
+                .resetToken(token)
                 .email(existingUser.getEmail())
                 .build();
 
@@ -146,24 +166,44 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public boolean resetPassword(String token, PasswordResetRequest passwordResetRequest) {
-        User existingUser = userRepository.findByResetToken(token).orElseThrow(() -> new GlobalException("Invalid token!!!", HttpStatus.BAD_REQUEST));
+        UserPasswordResetRequest existingPasswordResetRequest = passwordResetRepository.findByVerificationCode(token)
+                .orElseThrow(() -> new GlobalException("Invalid token!", HttpStatus.BAD_REQUEST));
 
         Date now = new Date();
-        if (now.after(existingUser.getResetTokenExpiration())) {
+        if (now.after(existingPasswordResetRequest.getVerificationCodeExpiration())) {
             throw new GlobalException("Token is expired!!!", HttpStatus.BAD_REQUEST);
         }
 
 
         if (!passwordResetRequest.getNewPassword().equals(passwordResetRequest.getConfirmPassword())) {
-            log.warn("resetPassword() --> Password and confirm password do not match for user: {}", existingUser.getUsername());
+            log.warn("resetPassword() --> Password and confirm password do not match for user: {}", existingPasswordResetRequest.getUser().getUsername());
             return false;
         }
 
-        existingUser.setPassword(passwordEncoder.encode(passwordResetRequest.getNewPassword()));
-        existingUser.setResetToken(null);
-        existingUser.setResetTokenExpiration(null);
-        userRepository.save(existingUser);
-        log.info("resetPassword() --> Password reset successfully for user: {}", existingUser.getUsername());
+        User user = existingPasswordResetRequest.getUser();
+
+        user.setPassword(passwordEncoder.encode(passwordResetRequest.getNewPassword()));
+        existingPasswordResetRequest.setVerificationCode(null);
+        existingPasswordResetRequest.setVerificationCodeExpiration(null);
+        userRepository.save(user);
+        passwordResetRepository.save(existingPasswordResetRequest);
+        log.info("resetPassword() --> Password reset successfully for user: {}", user.getUsername());
+        return true;
+    }
+
+    @Override
+    @Transactional
+    public boolean verifyEmail(String verificationCode) {
+        UserEmailVerification emailVerification = verificationRepository.findByVerificationCode(verificationCode).orElseThrow(
+                () -> new GlobalException("Invalid token", HttpStatus.BAD_REQUEST)
+        );
+
+        Date now = new Date();
+
+        emailVerification.setVerifiedAt(now);
+        emailVerification.setVerificationCode(null);
+
+        verificationRepository.save(emailVerification);
         return true;
     }
 }

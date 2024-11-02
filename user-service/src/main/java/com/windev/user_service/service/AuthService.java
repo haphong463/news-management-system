@@ -20,4 +20,6 @@ public interface AuthService {
     void initiatePasswordReset(String email);
 
     boolean resetPassword(String token, PasswordResetRequest passwordResetRequest);
+
+    boolean verifyEmail(String verificationCode);
 }

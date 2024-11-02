@@ -1,5 +1,6 @@
 package com.windev.user_service.entity;
 
+import java.util.HashSet;
 import lombok.*;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
@@ -21,6 +22,12 @@ public class User {
     @Column(nullable = false, unique=true, length=50)
     private String username;
 
+    @Column(nullable = false, length = 50)
+    private String firstName;
+
+    @Column(nullable = false, length = 50)
+    private String lastName;
+
     @Column(nullable = false)
     private String password;
 
@@ -36,13 +43,11 @@ public class User {
     @Column(name = "is_enabled", columnDefinition = "BOOLEAN NOT NULL", nullable = false)
     private Boolean enabled = true;
 
-    private String token;
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private UserEmailVerification userVerification;
 
-    private Date verifiedAt;
-
-    private String resetToken;
-
-    private Date resetTokenExpiration;
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<UserPasswordResetRequest> passwordResetTokens = new HashSet<>();
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(

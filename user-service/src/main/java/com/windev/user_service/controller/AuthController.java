@@ -7,10 +7,14 @@ import com.windev.user_service.dto.request.SigninRequest;
 import com.windev.user_service.dto.request.SignupRequest;
 import com.windev.user_service.service.AuthService;
 import jakarta.validation.Valid;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
@@ -22,7 +26,7 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<?> registerUser(@RequestBody SignupRequest user){
+    public ResponseEntity<?> registerUser(@RequestBody @Valid SignupRequest user){
         try{
             UserDto createdUser = authService.registerUser(user);
             return new ResponseEntity<>(createdUser, HttpStatus.CREATED);
@@ -73,8 +77,6 @@ public class AuthController {
     @PostMapping("/reset-password")
     public ResponseEntity<?> resetPassword(@RequestParam("token") String token, @Valid @RequestBody PasswordResetRequest passwordResetRequest){
         try {
-
-
             authService.resetPassword(token, passwordResetRequest);
             return new ResponseEntity<>("Password has been reset successfully.", HttpStatus.OK);
         }catch(Exception e){
@@ -82,5 +84,13 @@ public class AuthController {
         }
     }
 
-
+    @GetMapping("/verify-email/{token}")
+    public ResponseEntity<?> verifyEmail(@PathVariable("token") String token){
+        try {
+            authService.verifyEmail(token);
+            return new ResponseEntity<>("Email verification completed successfully.", HttpStatus.OK);
+        }catch(Exception e){
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 }
